@@ -34,7 +34,15 @@ The dataset must be `tsset`. Weights (`fweight`, `iweight`, `pweight`) are treat
 
 Built-in indices use analytic derivatives: `mean`, `var`, `power a`, `expmean g`, `ge a`, `theil`, `mld`, `atkinson e`, `gini`, `top p`, `hhi`.
 
-Any other index can be supplied as a program that only *computes* the index. Drift is the directional derivative of the index along survivors' changes, `d/ds nu(x + s dx)` at `s = 0`, computed numerically with four evaluations of the index whatever the number of units. Several variables per unit are allowed.
+You can also define your own index (see [below](#define-your-own-index)).
+
+## Output
+
+One observation per group and interval: `time0`, `time1`, the masses `N0`, `N1`, `NS`, the index `nu0`, `nu1`, `total`, `drift`, `displacement`, `demography`, `entry`, `exit`, `mass`, `selection`, and with `lag()`, `NS_lag`, `drift_lag`, `displacement_lag`.
+
+## Define your own index
+
+An index can be supplied as a program that only *computes* the index. Drift is the directional derivative of the index along survivors' changes, `d/ds nu(x + s dx)` at `s = 0`, computed numerically with four evaluations of the index whatever the number of units. Several variables per unit are allowed.
 
 As an ado program, returning the index in `r(nu)`, with masses in `_ddd_w` (use `double`s throughout):
 
@@ -59,10 +67,6 @@ real scalar wavg(real matrix X, real colvector w) return(quadsum(w :* X[., 2] :*
 end
 ddd tfp sales, index(mata: wavg()) clear
 ```
-
-## Output
-
-One observation per group and interval: `time0`, `time1`, the masses `N0`, `N1`, `NS`, the index `nu0`, `nu1`, `total`, `drift`, `displacement`, `demography`, `entry`, `exit`, `mass`, `selection`, and with `lag()`, `NS_lag`, `drift_lag`, `displacement_lag`.
 
 ## Tests
 
