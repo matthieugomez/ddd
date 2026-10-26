@@ -257,7 +257,7 @@ end
 program define _ddd_saving, sclass
 	gettoken filename 0 : 0, parse(",")
 	local filename = strtrim(`"`filename'"')
-	if `"`filename'"' == ""{
+	if inlist(`"`filename'"', "", ","){
 		di as error "saving() requires a filename"
 		exit 198
 	}
