@@ -4,7 +4,7 @@ test_ddd.do
 Purpose:
 	Tests for ddd: the accounting identities, the closed forms of Table 1 for the
 	built-in indices, the agreement of user-supplied indices (ado and Mata, numerical drift) with
-	the built-ins (analytic drift), weights, by(), horizons, lagged weights, the log decomposition,
+	the built-ins (analytic drift), weights, by(), horizons, lagged weights,
 	and the CES index.
 
 	Run from the package folder: do test/test_ddd.do
@@ -35,7 +35,8 @@ program define _check
 	* Accounting identities on the output of ddd
 	assert abs(total - (drift + displacement + demography)) < 1e-10 if !missing(drift)
 	assert abs(demography - (entry + exit)) < 1e-10 if !missing(drift)
-	assert abs(demography - (mass + selection)) < 1e-10 if !missing(drift)
+	assert abs(entry - (entry_mass + entry_selection)) < 1e-10 if !missing(drift)
+	assert abs(exit - (exit_mass + exit_selection)) < 1e-10 if !missing(drift)
 end
 
 /***************************************************************************************************
@@ -98,9 +99,9 @@ foreach spec in "var|myvar" "ge 1|mata: mytheil()" "gini|mygini"{
 	use `panel', clear
 	ddd x, index(`b') clear normalize
 	_check
-	rename (drift displacement demography mass) b_=
+	rename (drift displacement demography entry_mass exit_mass) b_=
 	merge 1:1 year0 year1 using `"`c(tmpdir)'/dd_a.dta"', assert(match) nogen
-	foreach v in drift displacement demography mass{
+	foreach v in drift displacement demography entry_mass exit_mass{
 		assert reldif(`v', b_`v') < 1e-6
 	}
 	di "  `a' = `b': ok"
@@ -208,9 +209,9 @@ foreach a in hhi gini "top 0.1" var{
 	bys id year: replace id = id * 10 + _n
 	tsset id year
 	ddd x, index(`a') clear
-	rename (drift displacement entry exit mass) b_=
+	rename (drift displacement entry exit entry_mass exit_mass) b_=
 	merge 1:1 year0 year1 using `"`c(tmpdir)'/dd_a.dta"', assert(match) nogen
-	foreach v in drift displacement entry exit mass{
+	foreach v in drift displacement entry exit entry_mass exit_mass{
 		assert abs(`v' - b_`v') < 1e-10
 	}
 	di "  `a': ok"
@@ -281,53 +282,13 @@ assert reldif(drift[1], `d') < 1e-8
 di "Test 7 passed"
 
 /***************************************************************************************************
-Test 8: Log decomposition. Logs of the split in levels
+Test 8: CES index. Expmean plus ln(N)/g: same survivor terms, the mass parts are the taste for variety
 ***************************************************************************************************/
-di _newline "=== Test 8: log ==="
-use `panel', clear
-ddd x, index(gini) clear
-gen double nuS0 = nu0 + exit
-gen double nuS1 = nu1 - entry
-keep year0 year1 nu0 nu1 nuS0 nuS1 drift
-rename drift drift_lev
-tempfile lev
-save `lev'
-use `panel', clear
-ddd x, index(gini) log clear
-_check
-merge 1:1 year0 year1 using `lev', assert(match) nogen
-assert abs(total - ln(nu1 / nu0)) < 1e-10
-assert abs(drift - ln((nuS0 + drift_lev) / nuS0)) < 1e-10
-assert abs(displacement - ln(nuS1 / (nuS0 + drift_lev))) < 1e-10
-assert abs(entry - ln(nu1 / nuS1)) < 1e-10
-assert abs(exit - ln(nuS0 / nu0)) < 1e-10
-* The Gini is population invariant: no mass
-assert abs(mass) < 1e-10
-* The mean is linear: initial weights predict the final index, so no displacement
-use `panel', clear
-ddd x, index(mean) log clear
-_check
-assert abs(displacement) < 1e-10
-* Lagged weights split the same log survivor change
-_sim 300 3 2
-ddd x, index(var) lag(1) log clear
-_check
-assert abs(drift + displacement - drift_lag - displacement_lag) < 1e-10 if !missing(drift_lag)
-* A nonpositive index has missing log terms
-use `panel', clear
-replace x = x - 100
-ddd x, index(mean) log clear
-assert missing(total) & missing(drift)
-di "Test 8 passed"
-
-/***************************************************************************************************
-Test 9: CES index. Expmean plus ln(N)/g: same survivor terms, mass is the taste for variety
-***************************************************************************************************/
-di _newline "=== Test 9: ces ==="
+di _newline "=== Test 8: ces ==="
 use `panel', clear
 gen double lx = ln(x)
 ddd lx, index(expmean 3) clear
-rename (drift displacement demography mass selection) e_=
+rename (drift displacement entry_mass entry_selection exit_mass exit_selection) e_=
 tempfile em
 save `em'
 use `panel', clear
@@ -337,9 +298,11 @@ _check
 merge 1:1 year0 year1 using `em', assert(match) nogen
 assert abs(drift - e_drift) < 1e-10
 assert abs(displacement - e_displacement) < 1e-10
-assert abs(mass - ln(N1 / N0) / 3) < 1e-10
-assert abs(e_mass) < 1e-10
-assert abs(selection - e_selection) < 1e-10
+assert abs(entry_mass - ln(N1 / NS) / 3) < 1e-10
+assert abs(exit_mass - ln(NS / N0) / 3) < 1e-10
+assert abs(e_entry_mass) < 1e-10 & abs(e_exit_mass) < 1e-10
+assert abs(entry_selection - e_entry_selection) < 1e-10
+assert abs(exit_selection - e_exit_selection) < 1e-10
 * Demography is ln of the survivors' share of exp(3 lx) at t over that at t + 1, divided by 3
 use `panel', clear
 gen double e = x^3
@@ -357,6 +320,6 @@ use `panel', clear
 gen double lx = ln(x)
 ddd lx, index(ces 3) clear
 assert abs(demography[1] - ln(`share0' / `share1') / 3) < 1e-10
-di "Test 9 passed"
+di "Test 8 passed"
 
 di _newline "All tests passed"

@@ -22,7 +22,7 @@
 
 {p 8 15 2} {cmd:ddd} {varlist} {ifin} [{it:{help weight}}] {cmd:,} {cmd:index(}{it:index}{cmd:)}
 {{cmd:saving(}{it:filename}[{cmd:, replace}]{cmd:)} | {cmd:clear}}
-[{cmd:by(}{it:varlist}{cmd:)} {cmd:horizon(}{it:#}{cmd:)} {cmd:lag(}{it:#}{cmd:)} {cmd:normalize} {cmd:log} {cmd:step(}{it:#}{cmd:)}]{p_end}
+[{cmd:by(}{it:varlist}{cmd:)} {cmd:horizon(}{it:#}{cmd:)} {cmd:lag(}{it:#}{cmd:)} {cmd:normalize} {cmd:step(}{it:#}{cmd:)}]{p_end}
 
 {pstd}
 {it:index} is a built-in index ({help ddd##indices:below}), the name of an rclass program,
@@ -48,8 +48,8 @@ Between two dates {it:t} and {it:t}+{it:h}, {cmd:ddd} splits the change in the i
 {pstd}
 Survivors are the units observed at both dates. The decomposition is exact:
 {cmd:total} = {cmd:drift} + {cmd:displacement} + {cmd:demography}.
-Demography splits in turn into {cmd:mass}, the effect of entry and exit that replicate the survivors,
-and {cmd:selection}, the rest, which is zero when entrants and exiters are distributed like survivors.
+Entry and exit each split in turn into a mass part ({cmd:entry_mass}, {cmd:exit_mass}), the effect of entrants or exiters that replicate the survivors,
+and a selection part ({cmd:entry_selection}, {cmd:exit_selection}), the rest, which is zero when entrants or exiters are distributed like survivors.
 
 {pstd}
 A unit is in the population at a date when it has an observation with nonmissing values of {varlist}.
@@ -70,7 +70,7 @@ E[.] is the average over units, weighted by their mass, and R is the percentile 
 {p2col :{cmd:power} {it:a}}E[x^a]{p_end}
 {p2col :{cmd:expmean} {it:g}}ln(E[exp(g x)]) / g{p_end}
 {p2col :{cmd:ces} {it:g}}ln(N E[exp(g x)]) / g, with N the mass of units, e.g. industry productivity with log productivity x and g = elasticity - 1;
-it is {cmd:expmean} plus ln(N) / g, so it has the same drift and displacement, and its mass term is the taste for variety{p_end}
+it is {cmd:expmean} plus ln(N) / g, so it has the same drift and displacement, and its mass parts are the taste for variety{p_end}
 {p2col :{cmd:ge} {it:a}}generalized entropy (E[(x/E[x])^a] - 1) / (a (a - 1)){p_end}
 {p2col :{cmd:theil}}{cmd:ge 1}, E[(x/E[x]) ln(x/E[x])]{p_end}
 {p2col :{cmd:mld}}{cmd:ge 0}, mean log deviation -E[ln(x/E[x])]{p_end}
@@ -149,15 +149,6 @@ For a scale-invariant index (Gini, top shares, generalized entropy, Atkinson, HH
 a common growth rate is not drift, and drift is the covariance between a weight and a change in normalized position.
 
 {phang}
-{cmd:log} decomposes the log change in a positive index, ln {cmd:nu1} - ln {cmd:nu0}, by taking logs of the split in levels.
-Among survivors, the change passes through the index predicted by the initial weights, the survivors' initial index plus {cmd:drift}:
-drift is the log growth from the survivors' initial index to this prediction, and displacement the log growth from the prediction to their final index.
-{cmd:entry}, {cmd:exit}, {cmd:mass}, and {cmd:selection} are the corresponding log changes, so the identities hold in logs.
-A common proportional change of positions is all drift for an index homogeneous of degree one.
-To first order, each term is its counterpart in levels divided by the index.
-Terms are missing when an index they involve is not positive.
-
-{phang}
 {cmd:step(}{it:#}{cmd:)} step of the numerical derivative for user-defined indices; default {cmd:step(1e-5)}.
 
 
@@ -170,16 +161,21 @@ One observation per group and interval:
 {p2colset 8 30 32 2}{...}
 {p2col :{it:byvars}}the {cmd:by()} variables{p_end}
 {p2col :{it:timevar}{cmd:0}, {it:timevar}{cmd:1}}start and end of the interval{p_end}
-{p2col :{cmd:N0}, {cmd:N1}, {cmd:NS}}mass of units at the start, at the end, and of survivors{p_end}
 {p2col :{cmd:nu0}, {cmd:nu1}}index at the start and at the end{p_end}
 {p2col :{cmd:total}}{cmd:nu1} - {cmd:nu0}{p_end}
 {p2col :{cmd:drift}, {cmd:displacement}}survivor terms{p_end}
-{p2col :{cmd:demography}}{cmd:entry} + {cmd:exit} = {cmd:mass} + {cmd:selection}{p_end}
+{p2col :{cmd:demography}}{cmd:entry} + {cmd:exit}{p_end}
+{p2col :{cmd:entry_mass}, {cmd:entry_selection}}mass and selection parts of {cmd:entry}{p_end}
+{p2col :{cmd:exit_mass}, {cmd:exit_selection}}mass and selection parts of {cmd:exit}{p_end}
+{p2col :{cmd:N0}, {cmd:N1}, {cmd:NS}}mass of units at the start, at the end, and of survivors{p_end}
 {p2col :{cmd:NS_lag}, {cmd:drift_lag}, {cmd:displacement_lag}}with {cmd:lag()}: mass of survivors also observed at the lagged date, and the survivor terms with lagged weights{p_end}
 {p2colreset}{...}
 
 {pstd}
-With {cmd:log}, {cmd:total} and the terms that follow it are in logs; {cmd:nu0} and {cmd:nu1} remain the index.
+{bf:Growth of the index.} For a positive index, decompose ln {cmd:nu1} - ln {cmd:nu0} by taking logs of the split in levels.
+With the survivors' indices nuS0 = {cmd:nu0} + {cmd:exit} and nuS1 = {cmd:nu1} - {cmd:entry},
+log drift is ln((nuS0 + {cmd:drift}) / nuS0), log displacement ln(nuS1 / (nuS0 + {cmd:drift})),
+log entry ln({cmd:nu1} / nuS1), and log exit ln(nuS0 / {cmd:nu0}).
 
 
 {marker examples}{...}

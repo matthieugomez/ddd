@@ -4,7 +4,7 @@ This Stata command implements the decomposition of Gomez, ["The Micro Origins of
 
 - **Drift**: the sum over survivors of each survivor's change times the derivative of the index with respect to its position, at the initial distribution
 - **Displacement**: the rest of the change among survivors, the effect of the weights changing as units move
-- **Demography**: the change in the full population minus the change among survivors (= entry + exit = mass + selection)
+- **Demography**: the change in the full population minus the change among survivors (= entry + exit, each split into a mass and a selection part)
 
 The decomposition is exact: **total change of the index = drift + displacement + demography**.
 
@@ -17,7 +17,7 @@ net install ddd, from("https://raw.githubusercontent.com/matthieugomez/ddd/main/
 ## Syntax
 
 ```stata
-ddd varlist [if] [in] [weight], index(index) {saving(filename[, replace]) | clear} [by(varlist) horizon(#) lag(#) normalize log step(#)]
+ddd varlist [if] [in] [weight], index(index) {saving(filename[, replace]) | clear} [by(varlist) horizon(#) lag(#) normalize step(#)]
 ```
 
 The dataset must be `tsset`. Weights (`fweight`, `iweight`, `pweight`) are treated as masses.
@@ -29,11 +29,18 @@ The dataset must be `tsset`. Weights (`fweight`, `iweight`, `pweight`) are treat
 | `horizon(#)` | length of the intervals in periods (default 1) |
 | `lag(#)` | also report drift and displacement with lagged weights (measurement error, flows) |
 | `normalize` | divide positions by the survivors' mean at each date (scale-invariant indices) |
-| `log` | decompose the log change of a positive index (growth) |
 
 ## Output
 
-One observation per group and interval: `time0`, `time1`, the masses `N0`, `N1`, `NS`, the index `nu0`, `nu1`, `total`, `drift`, `displacement`, `demography`, `entry`, `exit`, `mass`, `selection`, and with `lag()`, `NS_lag`, `drift_lag`, `displacement_lag`.
+One observation per group and interval:
+
+- with `by()`: the group variables
+- the start and end of the interval: `{timevar}0`, `{timevar}1`
+- the index at the start and at the end: `nu0`, `nu1`
+- the components: `total` = `drift` + `displacement` + `demography`
+- demography = `entry` + `exit`, with `entry` = `entry_mass` + `entry_selection` and `exit` = `exit_mass` + `exit_selection`
+- the masses at the start, at the end, and of survivors: `N0`, `N1`, `NS`
+- with `lag()`: the mass of survivors also observed at the lagged date, and drift and displacement with lagged weights: `NS_lag`, `drift_lag`, `displacement_lag`
 
 ## Define your own index
 
@@ -65,4 +72,4 @@ ddd tfp sales, index(mata: wavg()) clear
 
 ## Tests
 
-`do test/test_ddd.do` from the package folder checks the accounting identities, the closed forms of the paper's Table 1, that numerical drift equals analytic drift for every built-in index, weights, `by()`, `horizon()`, `lag()`, and `log`.
+`do test/test_ddd.do` from the package folder checks the accounting identities, the closed forms of the paper's Table 1, that numerical drift equals analytic drift for every built-in index, weights, `by()`, `horizon()`, and `lag()`.
