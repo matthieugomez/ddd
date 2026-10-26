@@ -17,18 +17,19 @@ net install ddd, from("https://raw.githubusercontent.com/matthieugomez/ddd/main/
 ## Syntax
 
 ```stata
-ddd varlist [if] [in] [weight], index(index) {save(filename) [replace] | clear} [by(varlist) horizon(numlist) lag(#) normalize step(#)]
+ddd varlist [if] [in] [weight], index(index) {saving(filename[, replace]) | clear} [by(varlist) horizon(#) lag(#) normalize log step(#)]
 ```
 
 The dataset must be `tsset`. Weights (`fweight`, `iweight`, `pweight`) are treated as masses.
 
 | Option | Meaning |
 |---|---|
-| `index()` | `mean`, `var`, `power a`, `expmean g`, `ge a`, `theil`, `mld`, `atkinson e`, `gini`, `top p`, `hhi`, or [your own index](#define-your-own-index) |
+| `index()` | `mean`, `var`, `power a`, `expmean g`, `ces g`, `ge a`, `theil`, `mld`, `atkinson e`, `gini`, `top p`, `hhi`, or [your own index](#define-your-own-index) |
 | `by()` | separate decomposition within each group |
-| `horizon(1 2 4)` | intervals of 1, 2, and 4 periods |
+| `horizon(#)` | length of the intervals in periods (default 1) |
 | `lag(#)` | also report drift and displacement with lagged weights (measurement error, flows) |
 | `normalize` | divide positions by the survivors' mean at each date (scale-invariant indices) |
+| `log` | decompose the log change of a positive index (growth) |
 
 ## Output
 
@@ -64,4 +65,4 @@ ddd tfp sales, index(mata: wavg()) clear
 
 ## Tests
 
-`do test/test_ddd.do` from the package folder checks the accounting identities, the closed forms of the paper's Table 1, that numerical drift equals analytic drift for every built-in index, weights, `by()`, `horizon()`, and `lag()`.
+`do test/test_ddd.do` from the package folder checks the accounting identities, the closed forms of the paper's Table 1, that numerical drift equals analytic drift for every built-in index, weights, `by()`, `horizon()`, `lag()`, and `log`.

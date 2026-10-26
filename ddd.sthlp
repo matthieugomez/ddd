@@ -21,8 +21,8 @@
 {title:Syntax}
 
 {p 8 15 2} {cmd:ddd} {varlist} {ifin} [{it:{help weight}}] {cmd:,} {cmd:index(}{it:index}{cmd:)}
-{{cmd:save(}{it:filename}{cmd:)} [{cmd:replace}] | {cmd:clear}}
-[{cmd:by(}{it:varlist}{cmd:)} {cmd:horizon(}{it:numlist}{cmd:)} {cmd:lag(}{it:#}{cmd:)} {cmd:normalize} {cmd:step(}{it:#}{cmd:)}]{p_end}
+{{cmd:saving(}{it:filename}[{cmd:, replace}]{cmd:)} | {cmd:clear}}
+[{cmd:by(}{it:varlist}{cmd:)} {cmd:horizon(}{it:#}{cmd:)} {cmd:lag(}{it:#}{cmd:)} {cmd:normalize} {cmd:log} {cmd:step(}{it:#}{cmd:)}]{p_end}
 
 {pstd}
 {it:index} is a built-in index ({help ddd##indices:below}), the name of an rclass program,
@@ -68,7 +68,9 @@ E[.] is the average over units, weighted by their mass, and R is the percentile 
 {p2col :{cmd:mean}}E[x]{p_end}
 {p2col :{cmd:var}}Var(x){p_end}
 {p2col :{cmd:power} {it:a}}E[x^a]{p_end}
-{p2col :{cmd:expmean} {it:g}}ln(E[exp(g x)]) / g, e.g. industry productivity with log productivity x and g = elasticity - 1{p_end}
+{p2col :{cmd:expmean} {it:g}}ln(E[exp(g x)]) / g{p_end}
+{p2col :{cmd:ces} {it:g}}ln(N E[exp(g x)]) / g, with N the mass of units, e.g. industry productivity with log productivity x and g = elasticity - 1;
+it is {cmd:expmean} plus ln(N) / g, so it has the same drift and displacement, and its mass term is the taste for variety{p_end}
 {p2col :{cmd:ge} {it:a}}generalized entropy (E[(x/E[x])^a] - 1) / (a (a - 1)){p_end}
 {p2col :{cmd:theil}}{cmd:ge 1}, E[(x/E[x]) ln(x/E[x])]{p_end}
 {p2col :{cmd:mld}}{cmd:ge 0}, mean log deviation -E[ln(x/E[x])]{p_end}
@@ -125,16 +127,15 @@ Indices whose influence function jumps, such as quantiles, have no drift in pane
 {cmd:index(}{it:index}{cmd:)} the index to decompose; required.
 
 {phang}
-{cmd:save(}{it:filename}{cmd:)} [{cmd:replace}] saves the decomposition to a dataset; {cmd:clear} replaces the dataset in memory with it.
+{cmd:saving(}{it:filename}[{cmd:, replace}]{cmd:)} saves the decomposition to a dataset; {cmd:clear} replaces the dataset in memory with it.
 One of the two is required.
 
 {phang}
 {cmd:by(}{it:varlist}{cmd:)} computes the decomposition separately within each group. A unit that changes group exits the first and enters the second.
 
 {phang}
-{cmd:horizon(}{it:numlist}{cmd:)} lengths of the intervals, in periods of the panel; default {cmd:horizon(1)}.
-{cmd:horizon(1 2 4)} decomposes the change over every interval of 1, 2, and 4 periods.
-A term of first order in time grows in proportion to the interval.
+{cmd:horizon(}{it:#}{cmd:)} length of the intervals, in periods of the panel; default {cmd:horizon(1)}.
+A term of first order in time grows in proportion to the interval: to compare horizons, run {cmd:ddd} once per horizon.
 
 {phang}
 {cmd:lag(}{it:#}{cmd:)} also reports drift and displacement with lagged weights: each survivor's weight is evaluated at its position {it:#} time units before the start of the interval,
@@ -146,6 +147,15 @@ The correction is estimated on the survivors also observed at the lagged date, a
 {cmd:normalize} divides positions by the survivors' mean at each date before splitting the survivor change into drift and displacement.
 For a scale-invariant index (Gini, top shares, generalized entropy, Atkinson, HHI), the index, the survivor change, and demography are unchanged,
 a common growth rate is not drift, and drift is the covariance between a weight and a change in normalized position.
+
+{phang}
+{cmd:log} decomposes the log change in a positive index, ln {cmd:nu1} - ln {cmd:nu0}, by taking logs of the split in levels.
+Among survivors, the change passes through the index predicted by the initial weights, the survivors' initial index plus {cmd:drift}:
+drift is the log growth from the survivors' initial index to this prediction, and displacement the log growth from the prediction to their final index.
+{cmd:entry}, {cmd:exit}, {cmd:mass}, and {cmd:selection} are the corresponding log changes, so the identities hold in logs.
+A common proportional change of positions is all drift for an index homogeneous of degree one.
+To first order, each term is its counterpart in levels divided by the index.
+Terms are missing when an index they involve is not positive.
 
 {phang}
 {cmd:step(}{it:#}{cmd:)} step of the numerical derivative for user-defined indices; default {cmd:step(1e-5)}.
@@ -160,7 +170,6 @@ One observation per group and interval:
 {p2colset 8 30 32 2}{...}
 {p2col :{it:byvars}}the {cmd:by()} variables{p_end}
 {p2col :{it:timevar}{cmd:0}, {it:timevar}{cmd:1}}start and end of the interval{p_end}
-{p2col :{cmd:horizon}}length of the interval (only with several horizons){p_end}
 {p2col :{cmd:N0}, {cmd:N1}, {cmd:NS}}mass of units at the start, at the end, and of survivors{p_end}
 {p2col :{cmd:nu0}, {cmd:nu1}}index at the start and at the end{p_end}
 {p2col :{cmd:total}}{cmd:nu1} - {cmd:nu0}{p_end}
@@ -168,6 +177,9 @@ One observation per group and interval:
 {p2col :{cmd:demography}}{cmd:entry} + {cmd:exit} = {cmd:mass} + {cmd:selection}{p_end}
 {p2col :{cmd:NS_lag}, {cmd:drift_lag}, {cmd:displacement_lag}}with {cmd:lag()}: mass of survivors also observed at the lagged date, and the survivor terms with lagged weights{p_end}
 {p2colreset}{...}
+
+{pstd}
+With {cmd:log}, {cmd:total} and the terms that follow it are in logs; {cmd:nu0} and {cmd:nu1} remain the index.
 
 
 {marker examples}{...}
@@ -179,7 +191,9 @@ One observation per group and interval:
 
 {pstd}Concentration of sales within each market, over intervals of one to four years{p_end}
 {phang2}{cmd:. tsset firm year}{p_end}
-{phang2}{cmd:. ddd sales, index(hhi) by(market) horizon(1 2 3 4) save(hhi_ddd, replace)}{p_end}
+{phang2}{cmd:. forvalues h = 1/4 {c -(}}{p_end}
+{phang2}{cmd:  2.     ddd sales, index(hhi) by(market) horizon(`h') saving(hhi_ddd`h', replace)}{p_end}
+{phang2}{cmd:  3. {c )-}}{p_end}
 
 {pstd}A user-defined index as an ado program: the coefficient of variation{p_end}
 {phang2}{cmd:. program define cv, rclass}{p_end}

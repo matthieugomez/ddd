@@ -4,7 +4,8 @@ test_ddd.do
 Purpose:
 	Tests for ddd: the accounting identities, the closed forms of Table 1 for the
 	built-in indices, the agreement of user-supplied indices (ado and Mata, numerical drift) with
-	the built-ins (analytic drift), weights, by(), horizons, and lagged weights.
+	the built-ins (analytic drift), weights, by(), horizons, lagged weights, the log decomposition,
+	and the CES index.
 
 	Run from the package folder: do test/test_ddd.do
 ***************************************************************************************************/
@@ -93,7 +94,7 @@ foreach spec in "var|myvar" "ge 1|mata: mytheil()" "gini|mygini"{
 	gettoken a b : spec, parse("|")
 	local b = substr("`b'", 2, .)
 	use `panel', clear
-	ddd x, index(`a') save(`"`c(tmpdir)'/dd_a.dta"') replace normalize
+	ddd x, index(`a') saving(`"`c(tmpdir)'/dd_a.dta"', replace) normalize
 	use `panel', clear
 	ddd x, index(`b') clear normalize
 	_check
@@ -172,13 +173,13 @@ program define bi, rclass
 		st_data(., "`w'"), 0, J(0, 1, .)))
 	return scalar nu = `nu'
 end
-foreach spec in "mean|" "var|" "power|1.5" "expmean|0.5" "ge|2" "ge|0" "ge|1" "atkinson|0.5" ///
+foreach spec in "mean|" "var|" "power|1.5" "expmean|0.5" "ces|0.5" "ge|2" "ge|0" "ge|1" "atkinson|0.5" ///
 	"atkinson|1" "hhi|" "gini|" "top|0.1"{
 	gettoken a p : spec, parse("|")
 	local p = substr("`p'", 2, .)
 	local q = cond("`p'" == "", "", "par(`p')")
 	use `panel', clear
-	ddd x [fw = 1 + mod(id, 3)], index(`a' `p') save(`"`c(tmpdir)'/dd_a.dta"') replace
+	ddd x [fw = 1 + mod(id, 3)], index(`a' `p') saving(`"`c(tmpdir)'/dd_a.dta"', replace)
 	use `panel', clear
 	gen w = 1 + mod(id, 3)
 	ddd x [fw = w], index(bi name(`a') `q') clear
@@ -200,7 +201,7 @@ di _newline "=== Test 5: weights ==="
 foreach a in hhi gini "top 0.1" var{
 	use `panel', clear
 	gen w = 1 + mod(id, 3)
-	ddd x [fw = w], index(`a') save(`"`c(tmpdir)'/dd_a.dta"') replace
+	ddd x [fw = w], index(`a') saving(`"`c(tmpdir)'/dd_a.dta"', replace)
 	use `panel', clear
 	gen w = 1 + mod(id, 3)
 	expand w
@@ -223,14 +224,14 @@ di _newline "=== Test 6: by(), horizon(), lag() ==="
 * by(): same as running each group separately
 use `panel', clear
 gen str1 grp = cond(mod(id, 2), "a", "b")
-ddd x, index(gini) by(grp) horizon(1 2) save(`"`c(tmpdir)'/dd_a.dta"') replace
+ddd x, index(gini) by(grp) horizon(2) saving(`"`c(tmpdir)'/dd_a.dta"', replace)
 use `panel', clear
 gen str1 grp = cond(mod(id, 2), "a", "b")
 keep if grp == "b"
-ddd x, index(gini) horizon(1 2) clear
+ddd x, index(gini) horizon(2) clear
 gen grp = "b"
 merge 1:1 grp year0 year1 using `"`c(tmpdir)'/dd_a.dta"', keep(match) nogen
-assert _N == 3
+assert _N == 1
 _check
 * Lagged weights on a balanced panel: drift_lag = 2Cov(x at t-1, dx)
 _sim 300 3 2
@@ -278,5 +279,84 @@ gen double s = exp(rnormal())
 ddd x s, index(mata: wavg()) clear
 assert reldif(drift[1], `d') < 1e-8
 di "Test 7 passed"
+
+/***************************************************************************************************
+Test 8: Log decomposition. Logs of the split in levels
+***************************************************************************************************/
+di _newline "=== Test 8: log ==="
+use `panel', clear
+ddd x, index(gini) clear
+gen double nuS0 = nu0 + exit
+gen double nuS1 = nu1 - entry
+keep year0 year1 nu0 nu1 nuS0 nuS1 drift
+rename drift drift_lev
+tempfile lev
+save `lev'
+use `panel', clear
+ddd x, index(gini) log clear
+_check
+merge 1:1 year0 year1 using `lev', assert(match) nogen
+assert abs(total - ln(nu1 / nu0)) < 1e-10
+assert abs(drift - ln((nuS0 + drift_lev) / nuS0)) < 1e-10
+assert abs(displacement - ln(nuS1 / (nuS0 + drift_lev))) < 1e-10
+assert abs(entry - ln(nu1 / nuS1)) < 1e-10
+assert abs(exit - ln(nuS0 / nu0)) < 1e-10
+* The Gini is population invariant: no mass
+assert abs(mass) < 1e-10
+* The mean is linear: initial weights predict the final index, so no displacement
+use `panel', clear
+ddd x, index(mean) log clear
+_check
+assert abs(displacement) < 1e-10
+* Lagged weights split the same log survivor change
+_sim 300 3 2
+ddd x, index(var) lag(1) log clear
+_check
+assert abs(drift + displacement - drift_lag - displacement_lag) < 1e-10 if !missing(drift_lag)
+* A nonpositive index has missing log terms
+use `panel', clear
+replace x = x - 100
+ddd x, index(mean) log clear
+assert missing(total) & missing(drift)
+di "Test 8 passed"
+
+/***************************************************************************************************
+Test 9: CES index. Expmean plus ln(N)/g: same survivor terms, mass is the taste for variety
+***************************************************************************************************/
+di _newline "=== Test 9: ces ==="
+use `panel', clear
+gen double lx = ln(x)
+ddd lx, index(expmean 3) clear
+rename (drift displacement demography mass selection) e_=
+tempfile em
+save `em'
+use `panel', clear
+gen double lx = ln(x)
+ddd lx, index(ces 3) clear
+_check
+merge 1:1 year0 year1 using `em', assert(match) nogen
+assert abs(drift - e_drift) < 1e-10
+assert abs(displacement - e_displacement) < 1e-10
+assert abs(mass - ln(N1 / N0) / 3) < 1e-10
+assert abs(e_mass) < 1e-10
+assert abs(selection - e_selection) < 1e-10
+* Demography is ln of the survivors' share of exp(3 lx) at t over that at t + 1, divided by 3
+use `panel', clear
+gen double e = x^3
+gen byte s0 = !missing(F.x)
+gen byte s1 = !missing(L.x)
+qui sum e if year == 2000, meanonly
+local E0 = r(sum)
+qui sum e if year == 2000 & s0, meanonly
+local share0 = r(sum) / `E0'
+qui sum e if year == 2001, meanonly
+local E1 = r(sum)
+qui sum e if year == 2001 & s1, meanonly
+local share1 = r(sum) / `E1'
+use `panel', clear
+gen double lx = ln(x)
+ddd lx, index(ces 3) clear
+assert abs(demography[1] - ln(`share0' / `share1') / 3) < 1e-10
+di "Test 9 passed"
 
 di _newline "All tests passed"

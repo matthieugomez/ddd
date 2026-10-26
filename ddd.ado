@@ -12,8 +12,8 @@
 program define ddd
 	version 16
 	syntax varlist(numeric) [if] [in] [fweight iweight pweight], Index(string asis) ///
-		[save(string) replace clear by(varlist) HORizon(numlist integer >0 sort) lag(integer 0) ///
-		NORMalize step(real 1e-5)]
+		[saving(string asis) clear by(varlist) HORizon(integer 1) lag(integer 0) ///
+		NORMalize LOG step(real 1e-5)]
 
 	/* 0: Check inputs */
 	cap qui tsset
@@ -29,15 +29,28 @@ program define ddd
 		exit 198
 	}
 
-	if "`save'`clear'" == ""{
-		di as error "You need to specify either the option save(filename) or the option clear. The first saves the output in an external file while the second replaces the existing dataset."
+	if `"`saving'`clear'"' == ""{
+		di as error "You need to specify either the option saving(filename) or the option clear. The first saves the output in an external file while the second replaces the existing dataset."
 		exit 198
 	}
-	if "`save'" != "" & "`clear'" != ""{
-		di as error "Options save(filename) and clear are mutually exclusive; specify only one."
+	if `"`saving'"' != "" & "`clear'" != ""{
+		di as error "Options saving(filename) and clear are mutually exclusive; specify only one."
 		exit 198
 	}
-	if "`horizon'" == "" local horizon 1
+	if `"`saving'"' != ""{
+		gettoken savefile saving : saving, parse(",")
+		local savefile = strtrim(`"`savefile'"')
+		if `"`savefile'"' == ""{
+			di as error "saving() requires a filename"
+			exit 198
+		}
+		local 0 `saving'
+		syntax [, replace]
+	}
+	if `horizon' <= 0{
+		di as error "horizon() must be a positive number of periods"
+		exit 198
+	}
 	if `lag' < 0{
 		di as error "lag() must be a positive number of periods"
 		exit 198
@@ -75,10 +88,10 @@ program define ddd
 	}
 	else{
 		gettoken name rest : index
-		local builtins mean var power expmean ge theil mld atkinson gini top hhi
+		local builtins mean var power expmean ces ge theil mld atkinson gini top hhi
 		if `: list name in builtins'{
 			local kind builtin
-			if inlist("`name'", "power", "expmean", "ge", "atkinson", "top"){
+			if inlist("`name'", "power", "expmean", "ces", "ge", "atkinson", "top"){
 				local rest = trim(`"`rest'"')
 				cap confirm number `rest'
 				if _rc{
@@ -90,8 +103,8 @@ program define ddd
 					di as error "index(top #) requires a share between 0 and 1, e.g. index(top 0.01)"
 					exit 198
 				}
-				if "`name'" == "expmean" & `par' == 0{
-					di as error "index(expmean #) requires a nonzero parameter"
+				if inlist("`name'", "expmean", "ces") & `par' == 0{
+					di as error "index(`name' #) requires a nonzero parameter"
 					exit 198
 				}
 			}
@@ -160,7 +173,6 @@ program define ddd
 	}
 
 	local tfmt : format `time'
-	local mult : word count `horizon'
 
 	/* 3: Compute the decomposition on a copy of the variables used */
 	tempvar gid iid
@@ -181,19 +193,19 @@ program define ddd
 			restore
 		}
 		mata: _ddd_run("`varlist'", "`wgt'", "`gid'", "`iid'", "`time'", `delta', ///
-			strtoreal(tokens("`horizon'")), `lag', "`normalize'" != "", "`kind'", "`name'", `par', ///
+			`horizon', `lag', "`normalize'" != "", "`log'" != "", "`kind'", "`name'", `par', ///
 			`"`cmd'"', "`ef'", `step', "`res'")
 	}
 
 	/* 4: Output dataset */
 	if rowsof(`res') == 0 | `res'[1, 1] == .{
-		di as error "No pair of dates in the data (with the horizons in horizon())"
+		di as error "No pair of dates `horizon' periods apart in the data"
 		exit 2000
 	}
 	frame create `out'
 	frame `out'{
 		qui svmat double `res'
-		local names _ddd_gid `time'0 `time'1 horizon N0 N1 NS nu0 nu1 total drift displacement ///
+		local names _ddd_gid `time'0 `time'1 N0 N1 NS nu0 nu1 total drift displacement ///
 			demography entry exit mass selection
 		if `lag' > 0 local names `names' NS_lag drift_lag displacement_lag
 		local j 0
@@ -209,34 +221,37 @@ program define ddd
 		}
 		else drop _ddd_gid
 		format `time'0 `time'1 `tfmt'
-		qui replace horizon = horizon * `delta'
 		label var `time'0 "Start of the interval"
 		label var `time'1 "End of the interval"
-		label var horizon "Length of the interval"
 		label var N0 "Mass of units at the start"
 		label var N1 "Mass of units at the end"
 		label var NS "Mass of survivors"
 		label var nu0 "Index at the start"
 		label var nu1 "Index at the end"
-		label var total "Change in the index (nu1 - nu0)"
-		label var drift "Drift"
-		label var displacement "Displacement"
-		label var demography "Demography (= entry + exit = mass + selection)"
-		label var entry "Entry"
-		label var exit "Exit"
-		label var mass "Mass part of demography"
-		label var selection "Selection part of demography"
+		if "`log'" != "" label var total "Log change in the index (ln nu1 - ln nu0)"
+		else label var total "Change in the index (nu1 - nu0)"
+		local inlogs = cond("`log'" != "", ", in logs", "")
+		label var drift "Drift`inlogs'"
+		label var displacement "Displacement`inlogs'"
+		label var demography "Demography`inlogs' (= entry + exit = mass + selection)"
+		label var entry "Entry`inlogs'"
+		label var exit "Exit`inlogs'"
+		label var mass "Mass part of demography`inlogs'"
+		label var selection "Selection part of demography`inlogs'"
 		if `lag' > 0{
 			label var NS_lag "Mass of survivors also observed `lag' before the start"
-			label var drift_lag "Drift with lagged weights"
-			label var displacement_lag "Displacement with lagged weights"
+			label var drift_lag "Drift with lagged weights`inlogs'"
+			label var displacement_lag "Displacement with lagged weights`inlogs'"
 		}
-		if `mult' == 1 drop horizon
+		if "`log'" != ""{
+			qui count if missing(total) | (missing(drift) & NS > 0)
+			if r(N) > 0 di as text "note: `r(N)' intervals involve a nonpositive index; their log terms are missing"
+		}
 		sort `by' `time'0 `time'1
 		qui save `output'
 	}
-	if "`save'" != ""{
-		frame `out': save `"`save'"', `replace'
+	if `"`savefile'"' != ""{
+		frame `out': save `"`savefile'"', `replace'
 	}
 	else{
 		use `output', clear
@@ -258,17 +273,17 @@ struct _ddd_index{
 	real scalar step
 }
 
-/* Driver: loop over groups, start dates, and horizons */
+/* Driver: loop over groups and start dates */
 void _ddd_run(string scalar vars, string scalar wvar, string scalar gvar, string scalar ivar,
-	string scalar tvar, real scalar delta, real rowvector H, real scalar lag, real scalar norm,
-	string scalar kind, string scalar name, real scalar par, string scalar cmd, string scalar ef,
-	real scalar step, string scalar outmat)
+	string scalar tvar, real scalar delta, real scalar h, real scalar lag, real scalar norm,
+	real scalar lg, string scalar kind, string scalar name, real scalar par, string scalar cmd,
+	string scalar ef, real scalar step, string scalar outmat)
 {
 	struct _ddd_index scalar ix
 	real matrix X, ginfo, tinfo, R
 	real colvector W, G, I, T, rg, Tg, times, r0, r1, rl, j1, jl
 	real rowvector res
-	real scalar g, j, h, M, t1
+	real scalar g, j, M, t1
 
 	ix.kind = kind
 	ix.name = name
@@ -286,7 +301,7 @@ void _ddd_run(string scalar vars, string scalar wvar, string scalar gvar, string
 	T = st_data(., tvar)
 	M = max(I)
 
-	R = J(0, 17 + 3 * (lag > 0), .)
+	R = J(0, 16 + 3 * (lag > 0), .)
 	ginfo = panelsetup(G, 1)
 	for (g = 1; g <= rows(ginfo); g++){
 		rg = ginfo[g, 1]::ginfo[g, 2]
@@ -300,14 +315,12 @@ void _ddd_run(string scalar vars, string scalar wvar, string scalar gvar, string
 				jl = selectindex(times :== times[j] - lag)
 				if (rows(jl) == 1) rl = rg[tinfo[jl, 1]::tinfo[jl, 2]]
 			}
-			for (h = 1; h <= cols(H); h++){
-				t1 = times[j] + H[h] * delta
-				j1 = selectindex(times :== t1)
-				if (rows(j1) != 1) continue
-				r1 = rg[tinfo[j1, 1]::tinfo[j1, 2]]
-				res = _ddd_pair(ix, X, W, I, r0, r1, rl, lag > 0, norm, M)
-				R = R \ (G[rg[1]], times[j], t1, H[h], res)
-			}
+			t1 = times[j] + h * delta
+			j1 = selectindex(times :== t1)
+			if (rows(j1) != 1) continue
+			r1 = rg[tinfo[j1, 1]::tinfo[j1, 2]]
+			res = _ddd_pair(ix, X, W, I, r0, r1, rl, lag > 0, norm, lg, M)
+			R = R \ (G[rg[1]], times[j], t1, res)
 		}
 	}
 	st_matrix(outmat, R)
@@ -316,17 +329,19 @@ void _ddd_run(string scalar vars, string scalar wvar, string scalar gvar, string
 /* Decomposition between two dates */
 real rowvector _ddd_pair(struct _ddd_index scalar ix, real matrix X, real colvector W,
 	real colvector I, real colvector r0, real colvector r1, real colvector rl,
-	real scalar dolag, real scalar norm, real scalar M)
+	real scalar dolag, real scalar norm, real scalar lg, real scalar M)
 {
 	real colvector pos, s1, keep, rs0, rs1, WS, sl, k3, WA
 	real matrix S0, S1, A0, A1, AL
-	real scalar N0, N1, NS, nu0, nu1, nuS0, nuS1, drift, disp, entry, exit, mass, NA, dA, dispA,
-		dL, share, driftlag, displag
+	real rowvector res
+	real scalar N0, N1, NS, nu0, nu1, total, nuS0, nuS1, mS0, mS1, drift, disp, entry, exit, mass,
+		NA, dA, dispA, dL, share, driftlag, displag
 
 	N0 = quadsum(W[r0])
 	N1 = quadsum(W[r1])
 	nu0 = _ddd_nu(ix, X[r0, .], W[r0])
 	nu1 = _ddd_nu(ix, X[r1, .], W[r1])
+	total = lg ? ln(nu1) - ln(nu0) : nu1 - nu0
 
 	// Survivors: units observed at both dates; they keep their mass at the start date
 	pos = J(M, 1, .)
@@ -334,7 +349,7 @@ real rowvector _ddd_pair(struct _ddd_index scalar ix, real matrix X, real colvec
 	s1 = pos[I[r0]]
 	keep = s1 :< .
 	if (!any(keep)){
-		return((N0, N1, 0, nu0, nu1, nu1 - nu0, ., ., ., ., ., ., .) , J(1, 3 * dolag, .))
+		return((N0, N1, 0, nu0, nu1, total, ., ., ., ., ., ., .) , J(1, 3 * dolag, .))
 	}
 	rs0 = select(r0, keep)
 	rs1 = select(s1, keep)
@@ -350,17 +365,16 @@ real rowvector _ddd_pair(struct _ddd_index scalar ix, real matrix X, real colvec
 	entry = nu1 - nuS1
 	exit = nuS0 - nu0
 	// Mass: entry and exit that replicate the survivors
-	mass = _ddd_nu(ix, S1, WS * (N1 / NS)) - nuS1 + nuS0 - _ddd_nu(ix, S0, WS * (N0 / NS))
-
-	if (!dolag) return((N0, N1, NS, nu0, nu1, nu1 - nu0, drift, disp, entry + exit, entry, exit,
-		mass, entry + exit - mass))
+	mS0 = _ddd_nu(ix, S0, WS * (N0 / NS))
+	mS1 = _ddd_nu(ix, S1, WS * (N1 / NS))
+	mass = mS1 - nuS1 + nuS0 - mS0
 
 	// Lagged weights: estimated on the survivors also observed at the lagged date, as a share of
 	// their displacement, and applied to all survivors
 	driftlag = .
 	displag = .
 	NA = 0
-	if (rows(rl) > 0){
+	if (dolag & rows(rl) > 0){
 		pos = J(M, 1, .)
 		pos[I[rl]] = rl
 		sl = pos[I[rs0]]
@@ -379,8 +393,23 @@ real rowvector _ddd_pair(struct _ddd_index scalar ix, real matrix X, real colvec
 			displag = disp + share * disp
 		}
 	}
-	return((N0, N1, NS, nu0, nu1, nu1 - nu0, drift, disp, entry + exit, entry, exit, mass,
-		entry + exit - mass, NA, driftlag, displag))
+
+	// In logs, each term is the log change between the indices it compares (missing unless they are
+	// positive): among survivors, the change passes through the index predicted by the initial
+	// weights, nuS0 + drift
+	if (lg){
+		displag = ln(nuS1) - ln(nuS0 + driftlag)
+		driftlag = ln(nuS0 + driftlag) - ln(nuS0)
+		disp = ln(nuS1) - ln(nuS0 + drift)
+		drift = ln(nuS0 + drift) - ln(nuS0)
+		entry = ln(nu1) - ln(nuS1)
+		exit = ln(nuS0) - ln(nu0)
+		mass = ln(mS1) - ln(nuS1) + ln(nuS0) - ln(mS0)
+	}
+	res = (N0, N1, NS, nu0, nu1, total, drift, disp, entry + exit, entry, exit, mass,
+		entry + exit - mass)
+	if (dolag) res = res, (NA, driftlag, displag)
+	return(res)
 }
 
 /* Drift with weights evaluated at Xw and changes Xb - Xa; with norm, positions are divided by
@@ -472,11 +501,12 @@ real scalar _ddd_builtin(string scalar name, real scalar a, real colvector x, re
 		nu = quadsum(w :* x:^a) / N
 		if (wantg) g = a * w :* x:^(a - 1) / N
 	}
-	else if (name == "expmean"){
+	else if (name == "expmean" | name == "ces"){
+		// ces sums over units rather than averaging across them
 		c = max(a * x)
 		e = exp(a * x :- c)
 		S = quadsum(w :* e)
-		nu = (c + ln(S / N)) / a
+		nu = (c + ln(name == "ces" ? S : S / N)) / a
 		if (wantg) g = w :* e / S
 	}
 	else if (name == "ge"){
