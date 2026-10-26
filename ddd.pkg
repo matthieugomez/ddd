@@ -1,0 +1,15 @@
+v 3
+
+d ddd. Decompose the change in a distributional index into drift, displacement, and demography
+d
+d Author: Matthieu Gomez
+d
+d
+d KW: decomposition, inequality, concentration, productivity, panel
+d
+d Requires: Stata version 16
+d
+d Distribution-Date: 20261025
+d
+f ddd.ado
+f ddd.sthlp

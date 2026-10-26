@@ -1,0 +1,3 @@
+v 3
+d Matthieu Gomez, Columbia University (mg3901@columbia.edu)
+p ddd DDD - decompose the change in a distributional index into drift, displacement, and demography
