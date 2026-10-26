@@ -38,14 +38,9 @@ program define ddd
 		exit 198
 	}
 	if `"`saving'"' != ""{
-		gettoken savefile saving : saving, parse(",")
-		local savefile = strtrim(`"`savefile'"')
-		if `"`savefile'"' == ""{
-			di as error "saving() requires a filename"
-			exit 198
-		}
-		local 0 `saving'
-		syntax [, replace]
+		_ddd_saving `saving'
+		local savefile `"`s(filename)'"'
+		local replace `s(replace)'
 	}
 	if `horizon' <= 0{
 		di as error "horizon() must be a positive number of periods"
@@ -256,6 +251,19 @@ program define ddd
 	else{
 		use `output', clear
 	}
+end
+
+/* Parse saving(filename[, replace]) */
+program define _ddd_saving, sclass
+	gettoken filename 0 : 0, parse(",")
+	local filename = strtrim(`"`filename'"')
+	if `"`filename'"' == ""{
+		di as error "saving() requires a filename"
+		exit 198
+	}
+	syntax [, replace]
+	sreturn local filename `"`filename'"'
+	sreturn local replace `replace'
 end
 
 
