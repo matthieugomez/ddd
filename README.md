@@ -24,17 +24,11 @@ The dataset must be `tsset`. Weights (`fweight`, `iweight`, `pweight`) are treat
 
 | Option | Meaning |
 |---|---|
-| `index()` | a built-in index, an rclass program, or `mata: fcn()` |
+| `index()` | `mean`, `var`, `power a`, `expmean g`, `ge a`, `theil`, `mld`, `atkinson e`, `gini`, `top p`, `hhi`, or [your own index](#define-your-own-index) |
 | `by()` | separate decomposition within each group |
 | `horizon(1 2 4)` | intervals of 1, 2, and 4 periods |
 | `lag(#)` | also report drift and displacement with lagged weights (measurement error, flows) |
 | `normalize` | divide positions by the survivors' mean at each date (scale-invariant indices) |
-
-## Indices
-
-Built-in indices use analytic derivatives: `mean`, `var`, `power a`, `expmean g`, `ge a`, `theil`, `mld`, `atkinson e`, `gini`, `top p`, `hhi`.
-
-You can also define your own index (see [below](#define-your-own-index)).
 
 ## Output
 
