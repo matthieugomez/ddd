@@ -40,7 +40,7 @@ program define _check
 end
 
 /***************************************************************************************************
-Test 1: Variance. Drift = 2Cov(x, dx) and displacement = Var(dx) among survivors
+Test 1: Variance. Drift = 2Cov(x, dx) and displacement = Var(dx) among continuing units
 ***************************************************************************************************/
 di _newline "=== Test 1: variance ==="
 _sim 300 3 1
@@ -112,7 +112,7 @@ di "Test 2 passed"
 Test 3: Closed forms of Table 1 (normalized positions)
 ***************************************************************************************************/
 di _newline "=== Test 3: closed forms ==="
-* Survivors between 2000 and 2001, positions normalized by their mean at each date
+* Continuing units between 2000 and 2001, positions normalized by their mean at each date
 use `panel', clear
 gen double x1 = F.x
 keep if year == 2000 & !missing(x1)
@@ -131,11 +131,11 @@ gen double e1 = exp(2 * ln(x1))
 qui sum e0, meanonly
 gen double s0 = e0 / r(mean)
 qui sum e1, meanonly
-gen double s1 = e1 / r(mean)
-gen double kl = s0 * ln(s0 / s1)
+gen double c1 = e1 / r(mean)
+gen double kl = s0 * ln(s0 / c1)
 qui sum kl, meanonly
 local expm = r(mean) / 2
-* Gini: displacement = 2 E[n1 (R1 - R0)], midrank percentile ranks among survivors
+* Gini: displacement = 2 E[n1 (R1 - R0)], midrank percentile ranks among continuing units
 foreach t in 0 1{
 	sort x`t'
 	gen double R`t' = (_n - 0.5) / _N
@@ -282,7 +282,7 @@ assert reldif(drift[1], `d') < 1e-8
 di "Test 7 passed"
 
 /***************************************************************************************************
-Test 8: CES index. Expmean plus ln(N)/g: same survivor terms, the mass parts are the taste for variety
+Test 8: CES index. Expmean plus ln(N)/g: same drift and displacement, the mass parts are the taste for variety
 ***************************************************************************************************/
 di _newline "=== Test 8: ces ==="
 use `panel', clear
@@ -298,23 +298,23 @@ _check
 merge 1:1 year0 year1 using `em', assert(match) nogen
 assert abs(drift - e_drift) < 1e-10
 assert abs(displacement - e_displacement) < 1e-10
-assert abs(entry_mass - ln(N1 / NS) / 3) < 1e-10
-assert abs(exit_mass - ln(NS / N0) / 3) < 1e-10
+assert abs(entry_mass - ln(N1 / NC) / 3) < 1e-10
+assert abs(exit_mass - ln(NC / N0) / 3) < 1e-10
 assert abs(e_entry_mass) < 1e-10 & abs(e_exit_mass) < 1e-10
 assert abs(entry_selection - e_entry_selection) < 1e-10
 assert abs(exit_selection - e_exit_selection) < 1e-10
-* Demography is ln of the survivors' share of exp(3 lx) at t over that at t + 1, divided by 3
+* Demography is ln of the continuing units' share of exp(3 lx) at t over that at t + 1, divided by 3
 use `panel', clear
 gen double e = x^3
 gen byte s0 = !missing(F.x)
-gen byte s1 = !missing(L.x)
+gen byte c1 = !missing(L.x)
 qui sum e if year == 2000, meanonly
 local E0 = r(sum)
 qui sum e if year == 2000 & s0, meanonly
 local share0 = r(sum) / `E0'
 qui sum e if year == 2001, meanonly
 local E1 = r(sum)
-qui sum e if year == 2001 & s1, meanonly
+qui sum e if year == 2001 & c1, meanonly
 local share1 = r(sum) / `E1'
 use `panel', clear
 gen double lx = ln(x)

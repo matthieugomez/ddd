@@ -2,11 +2,11 @@
 * Decompose the change in a distributional index into drift, displacement, and demography
 * (Gomez, "The Micro Origins of Aggregate Trends: Drift, Displacement, and Demography").
 *
-* Drift is the change in the index with each survivor's marginal weight held at its initial value,
-* displacement is the rest of the change among survivors, and demography is the difference between
-* the change in the full population and the change among survivors. Built-in indices use their
+* Drift is the change in the index with each continuing unit's marginal weight held at its initial value,
+* displacement is the rest of the change among continuing units, and demography is the difference between
+* the change in the full population and the change among continuing units. Built-in indices use their
 * analytic weights. A user-supplied index (an ado program or a Mata function) only needs to compute
-* the index: drift is then the directional derivative of the index along survivors' changes,
+* the index: drift is then the directional derivative of the index along continuing units' changes,
 * computed by a central difference with Richardson extrapolation.
 
 program define ddd
@@ -200,15 +200,15 @@ program define ddd
 	frame create `out'
 	frame `out'{
 		qui svmat double `res'
-		local names _ddd_gid `time'0 `time'1 N0 N1 NS nu0 nu1 total drift displacement ///
+		local names _ddd_gid `time'0 `time'1 N0 N1 NC nu0 nu1 total drift displacement ///
 			demography entry exit entry_mass entry_selection exit_mass exit_selection
-		if `lag' > 0 local names `names' NS_lag drift_lag displacement_lag
+		if `lag' > 0 local names `names' NC_lag drift_lag displacement_lag
 		local j 0
 		foreach v of local names{
 			local ++j
 			rename `res'`j' `v'
 		}
-		order N0 N1 NS, after(exit_selection)
+		order N0 N1 NC, after(exit_selection)
 		if "`by'" != ""{
 			rename _ddd_gid `gid'
 			qui merge m:1 `gid' using `map', keep(master matched) nogen
@@ -221,7 +221,7 @@ program define ddd
 		label var `time'1 "End of the interval"
 		label var N0 "Mass of units at the start"
 		label var N1 "Mass of units at the end"
-		label var NS "Mass of survivors"
+		label var NC "Mass of continuing units"
 		label var nu0 "Index at the start"
 		label var nu1 "Index at the end"
 		label var total "Change in the index (nu1 - nu0)"
@@ -235,7 +235,7 @@ program define ddd
 		label var exit_mass "Mass part of exit"
 		label var exit_selection "Selection part of exit"
 		if `lag' > 0{
-			label var NS_lag "Mass of survivors also observed `lag' before the start"
+			label var NC_lag "Mass of continuing units also observed `lag' before the start"
 			label var drift_lag "Drift with lagged weights"
 			label var displacement_lag "Displacement with lagged weights"
 		}
@@ -336,10 +336,10 @@ real rowvector _ddd_pair(struct _ddd_index scalar ix, real matrix X, real colvec
 	real colvector I, real colvector r0, real colvector r1, real colvector rl,
 	real scalar dolag, real scalar norm, real scalar M)
 {
-	real colvector pos, s1, keep, rs0, rs1, WS, sl, k3, WA
-	real matrix S0, S1, A0, A1, AL
+	real colvector pos, c1, keep, rc0, rc1, WC, cl, k3, WA
+	real matrix C0, C1, A0, A1, AL
 	real rowvector res
-	real scalar N0, N1, NS, nu0, nu1, total, nuS0, nuS1, mS0, mS1, drift, disp, entry, exit,
+	real scalar N0, N1, NC, nu0, nu1, total, nuC0, nuC1, mC0, mC1, drift, disp, entry, exit,
 		entrymass, exitmass, NA, dA, dispA, dL, share, driftlag, displag
 
 	N0 = quadsum(W[r0])
@@ -348,48 +348,48 @@ real rowvector _ddd_pair(struct _ddd_index scalar ix, real matrix X, real colvec
 	nu1 = _ddd_nu(ix, X[r1, .], W[r1])
 	total = nu1 - nu0
 
-	// Survivors: units observed at both dates; they keep their mass at the start date
+	// Continuing units: units observed at both dates; they keep their mass at the start date
 	pos = J(M, 1, .)
 	pos[I[r1]] = r1
-	s1 = pos[I[r0]]
-	keep = s1 :< .
+	c1 = pos[I[r0]]
+	keep = c1 :< .
 	if (!any(keep)){
 		return((N0, N1, 0, nu0, nu1, total, ., ., ., ., ., ., ., ., .) , J(1, 3 * dolag, .))
 	}
-	rs0 = select(r0, keep)
-	rs1 = select(s1, keep)
-	WS = W[rs0]
-	NS = quadsum(WS)
-	S0 = X[rs0, .]
-	S1 = X[rs1, .]
-	nuS0 = _ddd_nu(ix, S0, WS)
-	nuS1 = _ddd_nu(ix, S1, WS)
+	rc0 = select(r0, keep)
+	rc1 = select(c1, keep)
+	WC = W[rc0]
+	NC = quadsum(WC)
+	C0 = X[rc0, .]
+	C1 = X[rc1, .]
+	nuC0 = _ddd_nu(ix, C0, WC)
+	nuC1 = _ddd_nu(ix, C1, WC)
 
-	drift = _ddd_drift(ix, S0, S0, S1, WS, norm)
-	disp = nuS1 - nuS0 - drift
-	entry = nu1 - nuS1
-	exit = nuS0 - nu0
-	// Mass parts of entry and exit: entrants and exiters that replicate the survivors
-	mS0 = _ddd_nu(ix, S0, WS * (N0 / NS))
-	mS1 = _ddd_nu(ix, S1, WS * (N1 / NS))
-	entrymass = mS1 - nuS1
-	exitmass = nuS0 - mS0
+	drift = _ddd_drift(ix, C0, C0, C1, WC, norm)
+	disp = nuC1 - nuC0 - drift
+	entry = nu1 - nuC1
+	exit = nuC0 - nu0
+	// Mass parts of entry and exit: entrants and exiters that replicate the continuing units
+	mC0 = _ddd_nu(ix, C0, WC * (N0 / NC))
+	mC1 = _ddd_nu(ix, C1, WC * (N1 / NC))
+	entrymass = mC1 - nuC1
+	exitmass = nuC0 - mC0
 
-	// Lagged weights: estimated on the survivors also observed at the lagged date, as a share of
-	// their displacement, and applied to all survivors
+	// Lagged weights: estimated on the continuing units also observed at the lagged date, as a share of
+	// their displacement, and applied to all continuing units
 	driftlag = .
 	displag = .
 	NA = 0
 	if (dolag & rows(rl) > 0){
 		pos = J(M, 1, .)
 		pos[I[rl]] = rl
-		sl = pos[I[rs0]]
-		k3 = sl :< .
+		cl = pos[I[rc0]]
+		k3 = cl :< .
 		if (any(k3)){
-			A0 = select(S0, k3)
-			A1 = select(S1, k3)
-			AL = X[select(sl, k3), .]
-			WA = select(WS, k3)
+			A0 = select(C0, k3)
+			A1 = select(C1, k3)
+			AL = X[select(cl, k3), .]
+			WA = select(WC, k3)
 			NA = quadsum(WA)
 			dA = _ddd_drift(ix, A0, A0, A1, WA, norm)
 			dispA = _ddd_nu(ix, A1, WA) - _ddd_nu(ix, A0, WA) - dA
@@ -400,7 +400,7 @@ real rowvector _ddd_pair(struct _ddd_index scalar ix, real matrix X, real colvec
 		}
 	}
 
-	res = (N0, N1, NS, nu0, nu1, total, drift, disp, entry + exit, entry, exit, entrymass,
+	res = (N0, N1, NC, nu0, nu1, total, drift, disp, entry + exit, entry, exit, entrymass,
 		entry - entrymass, exitmass, exit - exitmass)
 	if (dolag) res = res, (NA, driftlag, displag)
 	return(res)

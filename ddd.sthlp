@@ -40,21 +40,21 @@ so their changes come from how units move, enter, and exit.
 Between two dates {it:t} and {it:t}+{it:h}, {cmd:ddd} splits the change in the index into
 
 {p2colset 8 24 26 2}{...}
-{p2col :{cmd:drift}}the sum over survivors of each survivor's change times the derivative of the index with respect to its position, evaluated at the initial distribution of survivors: the change predicted by holding each unit's marginal weight at its initial value{p_end}
-{p2col :{cmd:displacement}}the rest of the change in the index among survivors: the effect of the weights changing as units move{p_end}
-{p2col :{cmd:demography}}the change in the full population minus the change among survivors, the sum of {cmd:entry} (adding the entrants to the survivors at {it:t}+{it:h}) and {cmd:exit} (removing the exiters from the population at {it:t}){p_end}
+{p2col :{cmd:drift}}the sum over continuing units of each unit's change times the derivative of the index with respect to its position, evaluated at the initial distribution of continuing units: the change predicted by holding each unit's marginal weight at its initial value{p_end}
+{p2col :{cmd:displacement}}the rest of the change in the index among continuing units: the effect of the weights changing as units move{p_end}
+{p2col :{cmd:demography}}the change in the full population minus the change among continuing units, the sum of {cmd:entry} (adding the entrants to the continuing units at {it:t}+{it:h}) and {cmd:exit} (removing the exiters from the population at {it:t}){p_end}
 {p2colreset}{...}
 
 {pstd}
-Survivors are the units observed at both dates. The decomposition is exact:
+Continuing units are the units observed at both dates. The decomposition is exact:
 {cmd:total} = {cmd:drift} + {cmd:displacement} + {cmd:demography}.
-Entry and exit each split in turn into a mass part ({cmd:entry_mass}, {cmd:exit_mass}), the effect of entrants or exiters that replicate the survivors,
-and a selection part ({cmd:entry_selection}, {cmd:exit_selection}), the rest, which is zero when entrants or exiters are distributed like survivors.
+Entry and exit each split in turn into a mass part ({cmd:entry_mass}, {cmd:exit_mass}), the effect of entrants or exiters that replicate the continuing units,
+and a selection part ({cmd:entry_selection}, {cmd:exit_selection}), the rest, which is zero when entrants or exiters are distributed like continuing units.
 
 {pstd}
 A unit is in the population at a date when it has an observation with nonmissing values of {varlist}.
-With weights, each unit counts with its weight at each date, and survivors keep their weight at the start date at both dates,
-so that reweighting of survivors is part of demography.
+With weights, each unit counts with its weight at each date, and continuing units keep their weight at the start date at both dates,
+so that reweighting of continuing units is part of demography.
 
 
 {marker indices}{...}
@@ -88,7 +88,7 @@ it is {cmd:expmean} plus ln(N) / g, so it has the same drift and displacement, a
 {title:User-defined indices}
 
 {pstd}
-Any other index can be supplied as a program that computes it. Drift is then the derivative of the index along survivors' changes,
+Any other index can be supplied as a program that computes it. Drift is then the derivative of the index along continuing units' changes,
 d/ds nu(x + s dx) at s = 0, computed by a central difference with step {cmd:step()} and Richardson extrapolation.
 It takes four evaluations of the index, whatever the number of units.
 Several variables per unit are allowed (e.g. productivity and sales); drift then sums the changes of all variables.
@@ -138,14 +138,14 @@ One of the two is required.
 A term of first order in time grows in proportion to the interval: to compare horizons, run {cmd:ddd} once per horizon.
 
 {phang}
-{cmd:lag(}{it:#}{cmd:)} also reports drift and displacement with lagged weights: each survivor's weight is evaluated at its position {it:#} time units before the start of the interval,
+{cmd:lag(}{it:#}{cmd:)} also reports drift and displacement with lagged weights: each continuing unit's weight is evaluated at its position {it:#} time units before the start of the interval,
 which removes the bias from transitory measurement error and from flows (such as annual sales).
-The correction is estimated on the survivors also observed at the lagged date, as a share of their displacement, and applied to all survivors.
+The correction is estimated on the continuing units also observed at the lagged date, as a share of their displacement, and applied to all continuing units.
 {it:#} must be a multiple of the panel's delta.
 
 {phang}
-{cmd:normalize} divides positions by the survivors' mean at each date before splitting the survivor change into drift and displacement.
-For a scale-invariant index (Gini, top shares, generalized entropy, Atkinson, HHI), the index, the survivor change, and demography are unchanged,
+{cmd:normalize} divides positions by the continuing units' mean at each date before splitting the change among continuing units into drift and displacement.
+For a scale-invariant index (Gini, top shares, generalized entropy, Atkinson, HHI), the index, the change among continuing units, and demography are unchanged,
 a common growth rate is not drift, and drift is the covariance between a weight and a change in normalized position.
 
 {phang}
@@ -163,19 +163,19 @@ One observation per group and interval:
 {p2col :{it:timevar}{cmd:0}, {it:timevar}{cmd:1}}start and end of the interval{p_end}
 {p2col :{cmd:nu0}, {cmd:nu1}}index at the start and at the end{p_end}
 {p2col :{cmd:total}}{cmd:nu1} - {cmd:nu0}{p_end}
-{p2col :{cmd:drift}, {cmd:displacement}}survivor terms{p_end}
+{p2col :{cmd:drift}, {cmd:displacement}}terms among continuing units{p_end}
 {p2col :{cmd:demography}}{cmd:entry} + {cmd:exit}{p_end}
 {p2col :{cmd:entry_mass}, {cmd:entry_selection}}mass and selection parts of {cmd:entry}{p_end}
 {p2col :{cmd:exit_mass}, {cmd:exit_selection}}mass and selection parts of {cmd:exit}{p_end}
-{p2col :{cmd:N0}, {cmd:N1}, {cmd:NS}}mass of units at the start, at the end, and of survivors{p_end}
-{p2col :{cmd:NS_lag}, {cmd:drift_lag}, {cmd:displacement_lag}}with {cmd:lag()}: mass of survivors also observed at the lagged date, and the survivor terms with lagged weights{p_end}
+{p2col :{cmd:N0}, {cmd:N1}, {cmd:NC}}mass of units at the start, at the end, and of continuing units{p_end}
+{p2col :{cmd:NC_lag}, {cmd:drift_lag}, {cmd:displacement_lag}}with {cmd:lag()}: mass of continuing units also observed at the lagged date, and the terms among continuing units with lagged weights{p_end}
 {p2colreset}{...}
 
 {pstd}
 {bf:Growth of the index.} For a positive index, decompose ln {cmd:nu1} - ln {cmd:nu0} by taking logs of the split in levels.
-With the survivors' indices nuS0 = {cmd:nu0} + {cmd:exit} and nuS1 = {cmd:nu1} - {cmd:entry},
-log drift is ln((nuS0 + {cmd:drift}) / nuS0), log displacement ln(nuS1 / (nuS0 + {cmd:drift})),
-log entry ln({cmd:nu1} / nuS1), and log exit ln(nuS0 / {cmd:nu0}).
+With the continuing units' indices nuC0 = {cmd:nu0} + {cmd:exit} and nuC1 = {cmd:nu1} - {cmd:entry},
+log drift is ln((nuC0 + {cmd:drift}) / nuC0), log displacement ln(nuC1 / (nuC0 + {cmd:drift})),
+log entry ln({cmd:nu1} / nuC1), and log exit ln(nuC0 / {cmd:nu0}).
 
 
 {marker examples}{...}
