@@ -44,9 +44,7 @@ One observation per group and interval:
 
 ## Define your own index
 
-An index can be supplied as a program that only *computes* the index. Drift is the directional derivative of the index along continuing units' changes, `d/ds nu(x + s dx)` at `s = 0`, computed numerically with four evaluations of the index whatever the number of units. Several variables per unit are allowed.
-
-As an ado program, returning the index in `r(nu)`, with masses in `_ddd_w` (use `double`s throughout):
+You can supply the index as an ado program. The program must return the index in `r(nu)`. Use `double`s throughout:
 
 ```stata
 program define cv, rclass
@@ -60,19 +58,6 @@ program define cv, rclass
 end
 ddd wealth, index(cv) clear
 ```
-
-As a Mata function (faster), here of two variables:
-
-```stata
-mata:
-real scalar wavg(real matrix X, real colvector w) return(quadsum(w :* X[., 2] :* X[., 1]) / quadsum(w :* X[., 2]))
-end
-ddd tfp sales, index(mata: wavg()) clear
-```
-
-## Tests
-
-`do test/test_ddd.do` from the package folder checks the accounting identities, the closed forms of the paper's Table 1, that numerical drift equals analytic drift for every built-in index, weights, `by()`, `horizon()`, and `lag()`.
 
 ## Relation to `topdecompose`
 
