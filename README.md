@@ -46,28 +46,35 @@ One observation per group and interval:
 
 An index can be supplied as a program that only *computes* the index. Drift is the directional derivative of the index along continuing units' changes, `d/ds nu(x + s dx)` at `s = 0`, computed numerically with four evaluations of the index whatever the number of units. Several variables per unit are allowed.
 
-As an ado program, returning the index in `r(nu)`, with masses in `_ddd_w` (use `double`s throughout):
+The program receives the masses as `iweight`s and must return the index in `r(nu)` (use `double`s throughout):
 
 ```stata
 program define cv, rclass
-    syntax varname, w(varname)
+    syntax varname [iw]
     tempvar d
-    summarize `varlist' [iw = `w'], meanonly
+    summarize `varlist' [`weight'`exp'], meanonly
     local m = r(mean)
     gen double `d' = (`varlist' - `m')^2
-    summarize `d' [iw = `w'], meanonly
+    summarize `d' [`weight'`exp'], meanonly
     return scalar nu = sqrt(r(mean)) / `m'
 end
 ddd wealth, index(cv) clear
 ```
 
-As a Mata function (faster), here of two variables:
+With two variables, here average productivity weighted by sales:
 
 ```stata
-mata:
-real scalar wavg(real matrix X, real colvector w) return(quadsum(w :* X[., 2] :* X[., 1]) / quadsum(w :* X[., 2]))
+program define wavg, rclass
+    syntax varlist(min=2 max=2) [iw]
+    gettoken x s : varlist
+    tempvar sx
+    gen double `sx' = `s' * `x'
+    summarize `sx' [`weight'`exp'], meanonly
+    local num = r(mean)
+    summarize `s' [`weight'`exp'], meanonly
+    return scalar nu = `num' / r(mean)
 end
-ddd tfp sales, index(mata: wavg()) clear
+ddd tfp sales, index(wavg) clear
 ```
 
 ## Tests

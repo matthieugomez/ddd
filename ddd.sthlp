@@ -25,8 +25,7 @@
 [{cmd:by(}{it:varlist}{cmd:)} {cmd:horizon(}{it:#}{cmd:)} {cmd:lag(}{it:#}{cmd:)} {cmd:normalize} {cmd:step(}{it:#}{cmd:)}]{p_end}
 
 {pstd}
-{it:index} is a built-in index ({help ddd##indices:below}), the name of an rclass program,
-or {cmd:mata:} {it:fcn}{cmd:()}, a Mata function ({help ddd##user:below}).
+{it:index} is a built-in index ({help ddd##indices:below}) or the name of an rclass program ({help ddd##user:below}).
 {cmd:fweight}s, {cmd:iweight}s, and {cmd:pweight}s are allowed; all are treated as masses.
 The dataset must be declared as a panel ({help tsset}).
 
@@ -94,25 +93,18 @@ It takes four evaluations of the index, whatever the number of units.
 Several variables per unit are allowed (e.g. productivity and sales); drift then sums the changes of all variables.
 
 {pstd}
-{bf:Ado program.} {cmd:index(}{it:myprog} [{it:options}]{cmd:)} calls
+{cmd:index(}{it:myprog} [{it:options}]{cmd:)} calls
 
-{p 8 8 2}{cmd:myprog} {varlist}{cmd:, w(_ddd_w)} [{it:options}]{p_end}
+{p 8 8 2}{cmd:myprog} {varlist} {cmd:[iw=_ddd_w]} [{cmd:,} {it:options}]{p_end}
 
 {pstd}
-on a dataset that contains exactly the units at which the index is evaluated, with their mass in the variable {cmd:_ddd_w}.
-The program must be rclass and return the index in {cmd:r(nu)}. Two rules:
+on a dataset that contains exactly the units at which the index is evaluated, with their mass as an {cmd:iweight}.
+The program must be rclass, declare {cmd:[iw]} in its {cmd:syntax}, and return the index in {cmd:r(nu)}. Two rules:
 
 {phang2}1. Use {cmd:double}s for every variable you create ({cmd:gen double}). The numerical derivative needs about ten significant digits, and a {cmd:float} has seven.{p_end}
-{phang2}2. Treat {cmd:_ddd_w} as masses, not probabilities. {cmd:[iweight=_ddd_w]} does this in {cmd:summarize, meanonly};
-{cmd:aweight}s rescale the weights and {cmd:fweight}s require integers.{p_end}
-
-{pstd}
-{bf:Mata function.} {cmd:index(mata: }{it:fcn}{cmd:())} calls {it:fcn}{cmd:(X, w)}, where {it:fcn} is declared as
-
-{p 8 8 2}{cmd:real scalar} {it:fcn}{cmd:(real matrix X, real colvector w)}{p_end}
-
-{pstd}
-with one column of X per variable of {varlist} and w the masses. A Mata function is much faster than an ado program.
+{phang2}2. Treat the weights as masses, not probabilities. Passing them on with {cmd:[`weight'`exp']} does this in {cmd:summarize, meanonly};
+{cmd:aweight}s rescale the weights and {cmd:fweight}s require integers.
+To use the mass in a formula, declare {cmd:[iw/]}: {cmd:`exp'} is then the name of the variable.{p_end}
 
 {pstd}
 {bf:Indices with kinks.} For an index whose derivative jumps, such as a rank-based index, the numerical derivative is exact
@@ -191,23 +183,30 @@ log entry ln({cmd:nu1} / nuC1), and log exit ln(nuC0 / {cmd:nu0}).
 {phang2}{cmd:  2.     ddd sales, index(hhi) by(market) horizon(`h') saving(hhi_ddd`h', replace)}{p_end}
 {phang2}{cmd:  3. {c )-}}{p_end}
 
-{pstd}A user-defined index as an ado program: the coefficient of variation{p_end}
+{pstd}A user-defined index: the coefficient of variation{p_end}
 {phang2}{cmd:. program define cv, rclass}{p_end}
-{phang2}{cmd:  1.     syntax varname, w(varname)}{p_end}
+{phang2}{cmd:  1.     syntax varname [iw]}{p_end}
 {phang2}{cmd:  2.     tempvar d}{p_end}
-{phang2}{cmd:  3.     summarize `varlist' [iw = `w'], meanonly}{p_end}
+{phang2}{cmd:  3.     summarize `varlist' [`weight'`exp'], meanonly}{p_end}
 {phang2}{cmd:  4.     local m = r(mean)}{p_end}
 {phang2}{cmd:  5.     gen double `d' = (`varlist' - `m')^2}{p_end}
-{phang2}{cmd:  6.     summarize `d' [iw = `w'], meanonly}{p_end}
+{phang2}{cmd:  6.     summarize `d' [`weight'`exp'], meanonly}{p_end}
 {phang2}{cmd:  7.     return scalar nu = sqrt(r(mean)) / `m'}{p_end}
 {phang2}{cmd:  8. end}{p_end}
 {phang2}{cmd:. ddd wealth, index(cv) clear}{p_end}
 
-{pstd}A user-defined index of two variables as a Mata function: average productivity weighted by sales{p_end}
-{phang2}{cmd:. mata:}{p_end}
-{phang2}{cmd:: real scalar wavg(real matrix X, real colvector w) return(quadsum(w :* X[., 2] :* X[., 1]) / quadsum(w :* X[., 2]))}{p_end}
-{phang2}{cmd:: end}{p_end}
-{phang2}{cmd:. ddd tfp sales, index(mata: wavg()) clear}{p_end}
+{pstd}A user-defined index of two variables: average productivity weighted by sales{p_end}
+{phang2}{cmd:. program define wavg, rclass}{p_end}
+{phang2}{cmd:  1.     syntax varlist(min=2 max=2) [iw]}{p_end}
+{phang2}{cmd:  2.     gettoken x s : varlist}{p_end}
+{phang2}{cmd:  3.     tempvar sx}{p_end}
+{phang2}{cmd:  4.     gen double `sx' = `s' * `x'}{p_end}
+{phang2}{cmd:  5.     summarize `sx' [`weight'`exp'], meanonly}{p_end}
+{phang2}{cmd:  6.     local num = r(mean)}{p_end}
+{phang2}{cmd:  7.     summarize `s' [`weight'`exp'], meanonly}{p_end}
+{phang2}{cmd:  8.     return scalar nu = `num' / r(mean)}{p_end}
+{phang2}{cmd:  9. end}{p_end}
+{phang2}{cmd:. ddd tfp sales, index(wavg) clear}{p_end}
 
 
 {marker references}{...}

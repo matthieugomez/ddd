@@ -3,7 +3,7 @@ test_ddd.do
 
 Purpose:
 	Tests for ddd: the accounting identities, the closed forms of Table 1 for the
-	built-in indices, the agreement of user-supplied indices (ado and Mata, numerical drift) with
+	built-in indices, the agreement of user-supplied ado programs (numerical drift) with
 	the built-ins (analytic drift), weights, by(), horizons, lagged weights,
 	and the CES index.
 
@@ -58,22 +58,22 @@ assert abs(displacement[1] - `var') < 1e-10
 di "Test 1 passed"
 
 /***************************************************************************************************
-Test 2: User-supplied indices (ado and Mata) give the built-in decomposition
+Test 2: User-supplied ado programs give the built-in decomposition
 ***************************************************************************************************/
-di _newline "=== Test 2: ado and Mata indices ==="
+di _newline "=== Test 2: ado programs ==="
 capture program drop myvar
 program define myvar, rclass
-	syntax varname, w(varname)
+	syntax varname [iw]
 	tempvar d
-	qui sum `varlist' [iw = `w'], meanonly
+	qui sum `varlist' [`weight'`exp'], meanonly
 	qui gen double `d' = (`varlist' - r(mean))^2
-	qui sum `d' [iw = `w'], meanonly
+	qui sum `d' [`weight'`exp'], meanonly
 	return scalar nu = r(mean)
 end
 capture program drop mygini
 program define mygini, rclass
 	* Gini as the mean absolute difference over twice the mean (unweighted)
-	syntax varname, w(varname)
+	syntax varname [iw]
 	tempvar r
 	sort `varlist'
 	qui gen double `r' = (2 * _n - 1 - _N) * `varlist'
@@ -82,16 +82,17 @@ program define mygini, rclass
 	qui sum `varlist', meanonly
 	return scalar nu = `num' / (_N * r(sum))
 end
-mata:
-real scalar mytheil(real matrix X, real colvector w)
-{
-	real colvector xt
-	xt = X / (quadsum(w :* X) / quadsum(w))
-	return(quadsum(w :* xt :* ln(xt)) / quadsum(w))
-}
+capture program drop mytheil
+program define mytheil, rclass
+	syntax varname [iw]
+	tempvar k
+	qui sum `varlist' [`weight'`exp'], meanonly
+	qui gen double `k' = (`varlist' / r(mean)) * ln(`varlist' / r(mean))
+	qui sum `k' [`weight'`exp'], meanonly
+	return scalar nu = r(mean)
 end
 
-foreach spec in "var|myvar" "ge 1|mata: mytheil()" "gini|mygini"{
+foreach spec in "var|myvar" "ge 1|mytheil" "gini|mygini"{
 	gettoken a b : spec, parse("|")
 	local b = substr("`b'", 2, .)
 	use `panel', clear
@@ -105,6 +106,19 @@ foreach spec in "var|myvar" "ge 1|mata: mytheil()" "gini|mygini"{
 		assert reldif(`v', b_`v') < 1e-6
 	}
 	di "  `a' = `b': ok"
+}
+* Masses reach the program: a weighted ado index equals the weighted built-in
+use `panel', clear
+gen w = 1 + mod(id, 3)
+ddd x [fw = w], index(var) saving(`"`c(tmpdir)'/dd_a.dta"', replace)
+use `panel', clear
+gen w = 1 + mod(id, 3)
+ddd x [fw = w], index(myvar) clear
+_check
+rename (drift displacement demography entry_mass exit_mass) b_=
+merge 1:1 year0 year1 using `"`c(tmpdir)'/dd_a.dta"', assert(match) nogen
+foreach v in drift displacement demography entry_mass exit_mass{
+	assert reldif(`v', b_`v') < 1e-6
 }
 di "Test 2 passed"
 
@@ -168,10 +182,10 @@ run "`c(pwd)'/ddd.ado"
 capture program drop bi
 program define bi, rclass
 	* A built-in index called through the ado interface, so that drift is computed numerically
-	syntax varname, w(varname) name(string) [par(real 0)]
+	syntax varname [iw/], name(string) [par(real 0)]
 	tempname nu
 	mata: st_numscalar("`nu'", _ddd_builtin("`name'", `par', st_data(., "`varlist'"), ///
-		st_data(., "`w'"), 0, J(0, 1, .)))
+		st_data(., "`exp'"), 0, J(0, 1, .)))
 	return scalar nu = `nu'
 end
 foreach spec in "mean|" "var|" "power|1.5" "expmean|0.5" "ces|0.5" "ge|2" "ge|0" "ge|1" "atkinson|0.5" ///
@@ -251,15 +265,20 @@ di "Test 6 passed"
 Test 7: Two variables per unit (sales-weighted average productivity)
 ***************************************************************************************************/
 di _newline "=== Test 7: several variables ==="
-mata:
-real scalar wavg(real matrix X, real colvector w)
-{
-	return(quadsum(w :* X[., 2] :* X[., 1]) / quadsum(w :* X[., 2]))
-}
+capture program drop wavg
+program define wavg, rclass
+	syntax varlist(min=2 max=2) [iw]
+	gettoken x s : varlist
+	tempvar sx
+	qui gen double `sx' = `s' * `x'
+	qui sum `sx' [`weight'`exp'], meanonly
+	local num = r(mean)
+	qui sum `s' [`weight'`exp'], meanonly
+	return scalar nu = `num' / r(mean)
 end
 _sim 300 3 3
 gen double s = exp(rnormal())
-ddd x s, index(mata: wavg()) clear
+ddd x s, index(wavg) clear
 _check
 * Drift of a ratio of sums: E[s dx]/E[s] + E[(x - nu) ds]/E[s]
 _sim 300 3 3
@@ -277,7 +296,7 @@ qui sum k, meanonly
 local d = r(mean)
 _sim 300 3 3
 gen double s = exp(rnormal())
-ddd x s, index(mata: wavg()) clear
+ddd x s, index(wavg) clear
 assert reldif(drift[1], `d') < 1e-8
 di "Test 7 passed"
 

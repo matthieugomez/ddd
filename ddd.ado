@@ -5,7 +5,7 @@
 * Drift is the change in the index with each continuing unit's marginal weight held at its initial value,
 * displacement is the rest of the change among continuing units, and demography is the difference between
 * the change in the full population and the change among continuing units. Built-in indices use their
-* analytic weights. A user-supplied index (an ado program or a Mata function) only needs to compute
+* analytic weights. A user-supplied index (an ado program) only needs to compute
 * the index: drift is then the directional derivative of the index along continuing units' changes,
 * computed by a central difference with Richardson extrapolation.
 
@@ -67,71 +67,61 @@ program define ddd
 	}
 
 	/* 1: Parse the index */
-	* kind is builtin (analytic weights), mata (a Mata function), or ado (an rclass program)
+	* kind is builtin (analytic weights) or ado (an rclass program)
 	local index `index'
 	local par .
 	local cmd
-	if substr(`"`index'"', 1, 4) == "mata"{
-		local kind mata
-		local name = subinstr(substr(`"`index'"', 5, .), ":", "", 1)
-		local name = trim(subinstr("`name'", "()", "", 1))
-		mata: st_local("found", strofreal(findexternal("`name'()") != NULL))
-		if !`found'{
-			di as error "Mata function `name'() not found"
-			exit 111
+	gettoken name rest : index
+	local builtins mean var power expmean ces ge theil mld atkinson gini top hhi
+	if `: list name in builtins'{
+		local kind builtin
+		if inlist("`name'", "power", "expmean", "ces", "ge", "atkinson", "top"){
+			local rest = trim(`"`rest'"')
+			cap confirm number `rest'
+			if _rc{
+				di as error "index(`name' #) requires a numeric parameter"
+				exit 198
+			}
+			local par = `rest'
+			if "`name'" == "top" & !(`par' > 0 & `par' < 1){
+				di as error "index(top #) requires a share between 0 and 1, e.g. index(top 0.01)"
+				exit 198
+			}
+			if inlist("`name'", "expmean", "ces") & `par' == 0{
+				di as error "index(`name' #) requires a nonzero parameter"
+				exit 198
+			}
+		}
+		else if trim(`"`rest'"') != ""{
+			di as error "index(`name') takes no parameter"
+			exit 198
+		}
+		if "`name'" == "theil"{
+			local name ge
+			local par 1
+		}
+		if "`name'" == "mld"{
+			local name ge
+			local par 0
+		}
+		if `: word count `varlist'' > 1{
+			di as error "Built-in indices take a single variable"
+			exit 198
 		}
 	}
 	else{
-		gettoken name rest : index
-		local builtins mean var power expmean ces ge theil mld atkinson gini top hhi
-		if `: list name in builtins'{
-			local kind builtin
-			if inlist("`name'", "power", "expmean", "ces", "ge", "atkinson", "top"){
-				local rest = trim(`"`rest'"')
-				cap confirm number `rest'
-				if _rc{
-					di as error "index(`name' #) requires a numeric parameter"
-					exit 198
-				}
-				local par = `rest'
-				if "`name'" == "top" & !(`par' > 0 & `par' < 1){
-					di as error "index(top #) requires a share between 0 and 1, e.g. index(top 0.01)"
-					exit 198
-				}
-				if inlist("`name'", "expmean", "ces") & `par' == 0{
-					di as error "index(`name' #) requires a nonzero parameter"
-					exit 198
-				}
-			}
-			else if trim(`"`rest'"') != ""{
-				di as error "index(`name') takes no parameter"
-				exit 198
-			}
-			if "`name'" == "theil"{
-				local name ge
-				local par 1
-			}
-			if "`name'" == "mld"{
-				local name ge
-				local par 0
-			}
-			if `: word count `varlist'' > 1{
-				di as error "Built-in indices take a single variable"
-				exit 198
-			}
-		}
-		else{
-			local kind ado
-			cap program list `name'
+		local kind ado
+		cap program list `name'
+		if _rc{
+			cap findfile `name'.ado
 			if _rc{
-				cap findfile `name'.ado
-				if _rc{
-					di as error "`name' is neither a built-in index nor a program (built-in indices: `builtins')"
-					exit 111
-				}
+				di as error "`name' is neither a built-in index nor a program (built-in indices: `builtins')"
+				exit 111
 			}
-			local cmd `name' `varlist', w(_ddd_w) `rest'
 		}
+		* No comma without options: a program that declares none rejects a trailing comma
+		local cmd `name' `varlist' [iw=_ddd_w]
+		if trim(`"`rest'"') != "" local cmd `cmd', `rest'
 	}
 
 	/* 2: Sample and masses */
@@ -271,7 +261,6 @@ struct _ddd_index{
 	string scalar kind
 	string scalar name
 	real scalar par
-	pointer(real scalar function) scalar fp
 	string scalar cmd
 	string rowvector vnames
 	string scalar evalframe
@@ -297,7 +286,6 @@ void _ddd_run(string scalar vars, string scalar wvar, string scalar gvar, string
 	ix.vnames = tokens(vars)
 	ix.evalframe = ef
 	ix.step = step
-	if (kind == "mata") ix.fp = findexternal(name + "()")
 
 	X = st_data(., vars)
 	W = st_data(., wvar)
@@ -440,7 +428,6 @@ real scalar _ddd_nu(struct _ddd_index scalar ix, real matrix X, real colvector w
 {
 	real colvector g
 	if (ix.kind == "builtin") return(_ddd_builtin(ix.name, ix.par, X, w, 0, g))
-	if (ix.kind == "mata") return((*ix.fp)(X, w))
 	return(_ddd_ado(ix, X, w))
 }
 
