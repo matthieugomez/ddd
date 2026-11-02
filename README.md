@@ -44,9 +44,7 @@ One observation per group and interval:
 
 ## Define your own index
 
-An index can be supplied as a program that only *computes* the index. Drift is the directional derivative of the index along continuing units' changes, `d/ds nu(x + s dx)` at `s = 0`, computed numerically with four evaluations of the index whatever the number of units. Several variables per unit are allowed.
-
-The program receives the masses as `iweight`s and must return the index in `r(nu)` (use `double`s throughout):
+You can supply the index as an ado program. The program must return the index in `r(nu)`. Use `double`s throughout:
 
 ```stata
 program define cv, rclass
@@ -60,26 +58,6 @@ program define cv, rclass
 end
 ddd wealth, index(cv) clear
 ```
-
-With two variables, here average productivity weighted by sales:
-
-```stata
-program define wavg, rclass
-    syntax varlist(min=2 max=2) [iw]
-    gettoken x s : varlist
-    tempvar sx
-    gen double `sx' = `s' * `x'
-    summarize `sx' [`weight'`exp'], meanonly
-    local num = r(mean)
-    summarize `s' [`weight'`exp'], meanonly
-    return scalar nu = `num' / r(mean)
-end
-ddd tfp sales, index(wavg) clear
-```
-
-## Tests
-
-`do test/test_ddd.do` from the package folder checks the accounting identities, the closed forms of the paper's Table 1, that numerical drift equals analytic drift for every built-in index, weights, `by()`, `horizon()`, and `lag()`.
 
 ## Relation to `topdecompose`
 
