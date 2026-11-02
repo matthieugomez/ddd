@@ -4,9 +4,9 @@ This Stata command implements the decomposition of Gomez, ["The Micro Origins of
 
 - **Drift**: the sum over survivors of each survivor's change times the derivative of the index with respect to its position, at the initial distribution
 - **Displacement**: the rest of the change among survivors, the effect of the weights changing as units move
-- **Demography**: the change in the full population minus the change among survivors (= entry + exit, each split into a mass and a selection part)
+- **Demography**: the change in the full population minus the change among survivors (= entry + exit)
 
-The decomposition is exact: **total change of the index = drift + displacement + demography**.
+The three terms sum up to the total change of the index.
 
 ## Installation
 
