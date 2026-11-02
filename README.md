@@ -24,7 +24,7 @@ The dataset must be `tsset`. Weights (`fweight`, `iweight`, `pweight`) are treat
 
 | Option | Meaning |
 |---|---|
-| `index()` | `mean`, `var`, `power a`, `expmean g`, `ces g`, `ge a`, `theil`, `mld`, `atkinson e`, `gini`, `top p`, `hhi`, or [your own index](#define-your-own-index) |
+| `index()` | mean, var, power a, expmean g, ces g, ge a, theil, mld, atkinson e, gini, top p, hhi, or [your own index](#define-your-own-index) |
 | `by()` | separate decomposition within each group |
 | `horizon(#)` | length of the intervals in periods (default 1) |
 | `lag(#)` | also report drift and displacement with lagged weights (measurement error, flows) |
@@ -76,7 +76,7 @@ ddd tfp sales, index(mata: wavg()) clear
 
 ## Relation to `topdecompose`
 
-[`topdecompose`](https://github.com/matthieugomez/topdecompose) is an earlier command, written for Gomez, ["Decomposing the Growth of Top Wealth Shares"](https://doi.org/10.3982/ECTA21396) (*Econometrica*, 2024). It should be seen as an application of this decomposition to one index, the average wealth in a top percentile: `within` is drift, `between` is displacement, and `demography` is demography. The built-in `top p` is the share of the top; the average can be supplied as [your own index](#define-your-own-index). `topdecompose` reports growth rates, so compare its terms with those of `ddd` divided by `nu0`. On a balanced panel, the two then coincide.
+[`topdecompose`](https://github.com/matthieugomez/topdecompose) is an earlier command, written for Gomez, ["Decomposing the Growth of Top Wealth Shares"](https://doi.org/10.3982/ECTA21396) (*Econometrica*, 2024). It applies this decomposition to one index, the average wealth in a top percentile, which you can supply as [your own index](#define-your-own-index): `within` is drift, `between` is displacement, and `demography` is demography. It reports growth rates, so on a balanced panel its terms equal those of `ddd` divided by `nu0`.
 
 `topdecompose` was designed for a setup where the wealth of deaths and births is only observed in the top percentile, not in the whole population, as in the Forbes 400, whereas `ddd` needs the whole distribution. So, for top shares, `topdecompose` divides wealth by its mean in the whole population, whereas `ddd` with `normalize` divides by the mean among continuing units. Unless entrants and exiters are on average as rich as continuing units, part of demography then moves into `within`, even in continuous time.
 
