@@ -76,6 +76,7 @@ it is {cmd:expmean} plus ln(N) / g, so it has the same drift and displacement, a
 {p2col :{cmd:atkinson} {it:e}}1 - E[x^(1-e)]^(1/(1-e)) / E[x]{p_end}
 {p2col :{cmd:gini}}E[(2R - 1) x] / E[x]{p_end}
 {p2col :{cmd:top} {it:p}}share of the top fraction {it:p} of units, E[1(R >= 1 - p) x] / E[x], e.g. {cmd:top 0.01}{p_end}
+{p2col :{cmd:share} {it:lo hi}}share of the units with percentile rank between {it:lo} and {it:hi}, E[1(lo <= R < hi) x] / E[x], e.g. {cmd:share 0.4 0.5} for the fifth decile; its weight is not monotone in rank, so displacement and demography can have either sign; decomposing every decile shows how the whole distribution changes{p_end}
 {p2col :{cmd:hhi}}Herfindahl-Hirschman index, the sum of squared shares of x; it depends on the number of units{p_end}
 {p2colreset}{...}
 

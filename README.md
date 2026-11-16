@@ -24,7 +24,7 @@ The dataset must be `tsset`. Weights (`fweight`, `iweight`, `pweight`) are treat
 
 | Option | Meaning |
 |---|---|
-| `index()` | mean, var, power a, expmean g, ces g, ge a, theil, mld, atkinson e, gini, top p, hhi, or [your own index](#define-your-own-index) |
+| `index()` | mean, var, power a, expmean g, ces g, ge a, theil, mld, atkinson e, gini, top p, share lo hi (share of the units with percentile rank between lo and hi, such as a decile), hhi, or [your own index](#define-your-own-index) |
 | `by()` | separate decomposition within each group |
 | `horizon(#)` | length of the intervals in periods (default 1) |
 | `lag(#)` | also report drift and displacement with lagged weights (measurement error, flows) |

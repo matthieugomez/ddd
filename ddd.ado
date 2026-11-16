@@ -70,12 +70,32 @@ program define ddd
 	* kind is builtin (analytic weights) or ado (an rclass program)
 	local index `index'
 	local par .
+	local par2 .
 	local cmd
 	gettoken name rest : index
-	local builtins mean var power expmean ces ge theil mld atkinson gini top hhi
+	local builtins mean var power expmean ces ge theil mld atkinson gini top share hhi
 	if `: list name in builtins'{
 		local kind builtin
-		if inlist("`name'", "power", "expmean", "ces", "ge", "atkinson", "top"){
+		if "`name'" == "share"{
+			* share lo hi: the share held by the units whose percentile rank lies between lo and hi
+			local rest = trim(`"`rest'"')
+			if `: word count `rest'' != 2{
+				di as error "index(share # #) requires two ranks between 0 and 1, e.g. index(share 0.9 1) for the top decile"
+				exit 198
+			}
+			local lo : word 1 of `rest'
+			local hi : word 2 of `rest'
+			cap confirm number `lo'
+			local rc1 = _rc
+			cap confirm number `hi'
+			if `rc1' | _rc | !(`lo' >= 0 & `lo' < `hi' & `hi' <= 1){
+				di as error "index(share # #) requires two ranks 0 <= lo < hi <= 1, e.g. index(share 0.9 1) for the top decile"
+				exit 198
+			}
+			local par = `lo'
+			local par2 = `hi'
+		}
+		else if inlist("`name'", "power", "expmean", "ces", "ge", "atkinson", "top"){
 			local rest = trim(`"`rest'"')
 			cap confirm number `rest'
 			if _rc{
@@ -178,7 +198,7 @@ program define ddd
 			restore
 		}
 		mata: _ddd_run("`varlist'", "`wgt'", "`gid'", "`iid'", "`time'", `delta', ///
-			`horizon', `lag', "`normalize'" != "", "`kind'", "`name'", `par', ///
+			`horizon', `lag', "`normalize'" != "", "`kind'", "`name'", `par', `par2', ///
 			`"`cmd'"', "`ef'", `step', "`res'")
 	}
 
@@ -261,6 +281,7 @@ struct _ddd_index{
 	string scalar kind
 	string scalar name
 	real scalar par
+	real scalar par2
 	string scalar cmd
 	string rowvector vnames
 	string scalar evalframe
@@ -270,7 +291,7 @@ struct _ddd_index{
 /* Driver: loop over groups and start dates */
 void _ddd_run(string scalar vars, string scalar wvar, string scalar gvar, string scalar ivar,
 	string scalar tvar, real scalar delta, real scalar h, real scalar lag, real scalar norm,
-	string scalar kind, string scalar name, real scalar par, string scalar cmd,
+	string scalar kind, string scalar name, real scalar par, real scalar par2, string scalar cmd,
 	string scalar ef, real scalar step, string scalar outmat)
 {
 	struct _ddd_index scalar ix
@@ -282,6 +303,7 @@ void _ddd_run(string scalar vars, string scalar wvar, string scalar gvar, string
 	ix.kind = kind
 	ix.name = name
 	ix.par = par
+	ix.par2 = par2
 	ix.cmd = cmd
 	ix.vnames = tokens(vars)
 	ix.evalframe = ef
@@ -414,7 +436,7 @@ real scalar _ddd_dd(struct _ddd_index scalar ix, real matrix X, real colvector w
 	real colvector g
 	real scalar h, d1, d2
 	if (ix.kind == "builtin"){
-		(void) _ddd_builtin(ix.name, ix.par, X, w, 1, g)
+		(void) _ddd_builtin(ix.name, ix.par, ix.par2, X, w, 1, g)
 		return(quadsum(g :* D))
 	}
 	h = ix.step
@@ -427,7 +449,7 @@ real scalar _ddd_dd(struct _ddd_index scalar ix, real matrix X, real colvector w
 real scalar _ddd_nu(struct _ddd_index scalar ix, real matrix X, real colvector w)
 {
 	real colvector g
-	if (ix.kind == "builtin") return(_ddd_builtin(ix.name, ix.par, X, w, 0, g))
+	if (ix.kind == "builtin") return(_ddd_builtin(ix.name, ix.par, ix.par2, X, w, 0, g))
 	return(_ddd_ado(ix, X, w))
 }
 
@@ -462,7 +484,7 @@ real scalar _ddd_ado(struct _ddd_index scalar ix, real matrix X, real colvector 
 }
 
 /* Built-in indices: value, and with wantg the derivative with respect to each unit's position */
-real scalar _ddd_builtin(string scalar name, real scalar a, real colvector x, real colvector w,
+real scalar _ddd_builtin(string scalar name, real scalar a, real scalar a2, real colvector x, real colvector w,
 	real scalar wantg, real colvector g)
 {
 	real scalar N, m, nu, A, c, S, Mn, X
@@ -514,8 +536,8 @@ real scalar _ddd_builtin(string scalar name, real scalar a, real colvector x, re
 		nu = 1 - Mn / m
 		if (wantg) g = w / (N * m) :* (Mn / m :- Mn^a * x:^(-a))
 	}
-	else if (name == "gini" | name == "top"){
-		om = _ddd_rankweight(x, w, name, a)
+	else if (name == "gini" | name == "top" | name == "share"){
+		om = _ddd_rankweight(x, w, name, a, a2)
 		X = quadsum(w :* x)
 		nu = quadsum(w :* om :* x) / X
 		if (wantg) g = w / X :* (om :- nu)
@@ -530,7 +552,7 @@ real scalar _ddd_builtin(string scalar name, real scalar a, real colvector x, re
 
 /* Rank weight of each unit: the average of the rank-weight function over the percentile interval
    that the unit occupies, with tied units sharing their combined interval */
-real colvector _ddd_rankweight(real colvector x, real colvector w, string scalar name, real scalar p)
+real colvector _ddd_rankweight(real colvector x, real colvector w, string scalar name, real scalar p, real scalar p2)
 {
 	real colvector o, xs, ws, cum, gid, a, b, om, res
 	real matrix info
@@ -548,7 +570,9 @@ real colvector _ddd_rankweight(real colvector x, real colvector w, string scalar
 	a = cum[info[., 1]] - ws[info[., 1]] / N
 	b = cum[info[., 2]]
 	if (name == "gini") om = a + b :- 1
-	else om = rowmax((J(rows(a), 1, 0), b - rowmax((a, J(rows(a), 1, 1 - p))))) :/ (b - a)
+	else if (name == "top") om = rowmax((J(rows(a), 1, 0), b - rowmax((a, J(rows(a), 1, 1 - p))))) :/ (b - a)
+	// share p p2: the part of the unit's interval between ranks p and p2
+	else om = rowmax((J(rows(a), 1, 0), rowmin((b, J(rows(a), 1, p2))) - rowmax((a, J(rows(a), 1, p))))) :/ (b - a)
 	res = J(n, 1, .)
 	res[o] = om[gid]
 	return(res)

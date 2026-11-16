@@ -184,7 +184,7 @@ program define bi, rclass
 	* A built-in index called through the ado interface, so that drift is computed numerically
 	syntax varname [iw/], name(string) [par(real 0)]
 	tempname nu
-	mata: st_numscalar("`nu'", _ddd_builtin("`name'", `par', st_data(., "`varlist'"), ///
+	mata: st_numscalar("`nu'", _ddd_builtin("`name'", `par', ., st_data(., "`varlist'"), ///
 		st_data(., "`exp'"), 0, J(0, 1, .)))
 	return scalar nu = `nu'
 end
@@ -340,5 +340,38 @@ gen double lx = ln(x)
 ddd lx, index(ces 3) clear
 assert abs(demography[1] - ln(`share0' / `share1') / 3) < 1e-10
 di "Test 8 passed"
+
+/***************************************************************************************************
+Test 9: Shares of rank bands. share 0.9 1 is top 0.1, and each component sums to zero across deciles,
+since decile shares sum to one.
+***************************************************************************************************/
+di _newline "=== Test 9: share of a rank band ==="
+use `panel', clear
+ddd x [fw = 1 + mod(id, 3)], index(top 0.1) saving(`"`c(tmpdir)'/dd_a.dta"', replace)
+use `panel', clear
+ddd x [fw = 1 + mod(id, 3)], index(share 0.9 1) clear
+rename (nu0 nu1 drift displacement demography) b_=
+merge 1:1 year0 year1 using `"`c(tmpdir)'/dd_a.dta"', assert(match) nogen
+foreach v in nu0 nu1 drift displacement demography{
+	assert abs(`v' - b_`v') < 1e-12
+}
+forvalues d = 1/10{
+	use `panel', clear
+	ddd x [fw = 1 + mod(id, 3)], index(share `=(`d' - 1) / 10' `=`d' / 10') clear
+	_check
+	gen byte decile = `d'
+	tempfile dec`d'
+	save `dec`d''
+}
+clear
+forvalues d = 1/10{
+	append using `dec`d''
+}
+collapse (sum) nu0 nu1 total drift displacement demography, by(year0 year1)
+assert abs(nu0 - 1) < 1e-10 & abs(nu1 - 1) < 1e-10
+foreach v in total drift displacement demography{
+	assert abs(`v') < 1e-10
+}
+di "Test 9 passed"
 
 di _newline "All tests passed"
