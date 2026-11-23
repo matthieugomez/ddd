@@ -256,18 +256,26 @@ gen grp = "b"
 merge 1:1 grp year0 year1 using `"`c(tmpdir)'/dd_a.dta"', keep(match) nogen
 assert _N == 1
 _check
-* Lagged weights on a balanced panel: drift_lag = 2Cov(x at t-1, dx)
+* Lagged weights on a balanced panel: drift = 2Cov(x at t-1, dx). The first interval has no lagged date and
+* is dropped. chi_lag recovers drift and displacement with weights at the start.
 _sim 300 3 2
 bys id: keep if _N == 3
 tsset id year
 gen double dx = F.x - x
 qui corr L.x dx if year == 2001, cov
 local cov = r(cov_12) * (r(N) - 1) / r(N)
+ddd x, statistic(var) saving(`"`c(tmpdir)'/dd_a.dta"', replace)
 ddd x, statistic(var) lag(1) clear
-assert abs(drift_lag[2] - 2 * `cov') < 1e-10
-assert abs(drift + displacement - drift_lag - displacement_lag) < 1e-10 if !missing(drift_lag)
-assert reldif(chi_lag, (drift_lag - drift) / displacement) < 1e-8 if !missing(drift_lag)
-assert missing(drift_lag[1])
+assert _N == 1 & year0[1] == 2001
+_check
+assert abs(drift[1] - 2 * `cov') < 1e-10
+rename (drift displacement) l_=
+merge 1:1 year0 year1 using `"`c(tmpdir)'/dd_a.dta"', keep(match) nogen
+assert _N == 1
+assert abs(drift + displacement - l_drift - l_displacement) < 1e-10
+assert reldif(chi_lag, (l_drift - drift) / displacement) < 1e-8
+assert reldif(displacement, l_displacement / (1 - chi_lag)) < 1e-8
+assert reldif(drift, l_drift - chi_lag * l_displacement / (1 - chi_lag)) < 1e-8
 di "Test 6 passed"
 
 /***************************************************************************************************
@@ -383,39 +391,38 @@ assert abs(nu0 - 1) < 1e-10 & abs(nu1 - 1) < 1e-10
 foreach v in total drift displacement demography{
 	assert abs(`v') < 1e-10
 }
-use `panel', clear
-ddd x [fw = 1 + mod(id, 3)], statistic(mean) lag(1) saving(`"`c(tmpdir)'/dd_a.dta"', replace)
-use `panel', clear
-ddd x [fw = 1 + mod(id, 3)], statistic(average 0 1) lag(1) clear
-rename (nu0 nu1 drift displacement entry exit drift_lag displacement_lag) b_=
-merge 1:1 year0 year1 using `"`c(tmpdir)'/dd_a.dta"', assert(match) nogen
-foreach v in nu0 nu1 drift displacement entry exit{
-	assert abs(`v' - b_`v') < 1e-8 * abs(nu0)
-}
-assert abs(b_drift_lag - b_drift) < 1e-8 * abs(nu0) if !missing(b_drift_lag)
-forvalues d = 1/10{
+foreach l in 0 1{
 	use `panel', clear
-	ddd x [fw = 1 + mod(id, 3)], statistic(average `=(`d' - 1) / 10' `=`d' / 10') lag(1) clear
-	_check
-	gen byte decile = `d'
-	tempfile dec`d'
-	save `dec`d''
+	ddd x [fw = 1 + mod(id, 3)], statistic(mean) lag(`l') saving(`"`c(tmpdir)'/dd_a.dta"', replace)
+	use `panel', clear
+	ddd x [fw = 1 + mod(id, 3)], statistic(average 0 1) lag(`l') clear
+	rename (nu0 nu1 drift displacement entry exit) b_=
+	merge 1:1 year0 year1 using `"`c(tmpdir)'/dd_a.dta"', assert(match) nogen
+	foreach v in nu0 nu1 drift displacement entry exit{
+		assert abs(`v' - b_`v') < 1e-8 * abs(nu0)
+	}
+	forvalues d = 1/10{
+		use `panel', clear
+		ddd x [fw = 1 + mod(id, 3)], statistic(average `=(`d' - 1) / 10' `=`d' / 10') lag(`l') clear
+		_check
+		gen byte decile = `d'
+		tempfile dec`d'
+		save `dec`d''
+	}
+	clear
+	forvalues d = 1/10{
+		append using `dec`d''
+	}
+	foreach v in nu0 nu1 drift displacement demography{
+		replace `v' = `v' / 10
+	}
+	collapse (sum) nu0 nu1 drift displacement demography, by(year0 year1)
+	rename (nu0 nu1 drift displacement demography) s_=
+	merge 1:1 year0 year1 using `"`c(tmpdir)'/dd_a.dta"', assert(match) nogen
+	foreach v in nu0 nu1 drift displacement demography{
+		assert abs(s_`v' - `v') < 1e-8 * abs(nu0)
+	}
 }
-clear
-forvalues d = 1/10{
-	append using `dec`d''
-}
-foreach v in nu0 nu1 drift displacement demography drift_lag displacement_lag{
-	replace `v' = `v' / 10
-}
-collapse (sum) nu0 nu1 drift displacement demography drift_lag displacement_lag, by(year0 year1)
-rename (nu0 nu1 drift displacement demography drift_lag displacement_lag) s_=
-merge 1:1 year0 year1 using `"`c(tmpdir)'/dd_a.dta"', assert(match) nogen
-foreach v in nu0 nu1 drift displacement demography{
-	assert abs(s_`v' - `v') < 1e-8 * abs(nu0)
-}
-assert abs(s_drift_lag - drift) < 1e-8 * abs(nu0) if year0 == 2001
-assert abs(s_displacement_lag) < 1e-8 * abs(nu0) if year0 == 2001
 di "Test 9 passed"
 
 /***************************************************************************************************
@@ -428,9 +435,11 @@ foreach s in share average{
 	foreach b in "0.5 1" "0.9 1" "0.5 0.9"{
 		local ++j
 		use `panel', clear
+		ddd x [fw = 1 + mod(id, 3)], statistic(`s' `b') saving(`"`c(tmpdir)'/dd_a.dta"', replace)
 		ddd x [fw = 1 + mod(id, 3)], statistic(`s' `b') lag(1) clear
-		keep if !missing(drift_lag)
-		gen double c`j' = drift_lag - drift
+		rename drift l
+		merge 1:1 year0 year1 using `"`c(tmpdir)'/dd_a.dta"', keep(match) keepusing(drift) nogen
+		gen double c`j' = l - drift
 		rename drift d`j'
 		keep year0 c`j' d`j'
 		tempfile band`j'

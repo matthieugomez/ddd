@@ -26,7 +26,7 @@ The dataset must be `tsset`. Weights (`fweight`, `iweight`, `pweight`) are treat
 |---|---|
 | `statistic()` | mean, var, powermean a, powersum a (CES aggregate), expmean g, expsum g (CES aggregate in logs), ge a, theil, mld, atkinson e, gini, share lo hi (share of the units with percentile rank between lo and hi, such as the top 1% or a decile), average lo hi (their average), hhi, or [your own statistic](#define-your-own-statistic) |
 | `horizon(#)` | length of the intervals in periods (default 1) |
-| `lag(#)` | also report drift and displacement with lagged weights (measurement error, flows) |
+| `lag(#)` | drift and displacement with lagged weights (measurement error, flows); drops the intervals without continuing units observed at the lagged date |
 | `normalize` | divide positions by the continuing units' mean at each date when splitting drift and displacement (scale-invariant statistics) |
 | `by()` | separate decomposition within each group |
 
@@ -40,7 +40,40 @@ One observation per group and interval:
 - the components: `total` = `drift` + `displacement` + `demography`
 - demography = `entry` + `exit`, with `entry` = `entry_mass` + `entry_selection` and `exit` = `exit_mass` + `exit_selection`: mass is the effect of adding entrants, or removing exiters, distributed like the continuing units, and selection is the rest
 - the masses at the start, at the end, and of continuing units: `N0`, `N1`, `NC`
-- with `lag()`: the mass of continuing units also observed at the lagged date, drift and displacement with lagged weights, and the correction as a share of displacement: `NC_lag`, `drift_lag`, `displacement_lag`, `chi_lag`
+- with `lag()`: `drift` and `displacement` use lagged weights; `NC_lag` is the mass of continuing units also observed at the lagged date, and `chi_lag` the correction as a share of displacement with weights at the start, so that drift and displacement with weights at the start are `drift - chi_lag * displacement / (1 - chi_lag)` and `displacement / (1 - chi_lag)`
+
+## Standard errors
+
+`ddd` reports no standard errors, since what to resample depends on the data. Rerun it on bootstrap samples and take the standard deviation, across draws, of the quantity you report: a component, its average over intervals or groups, or a ratio of components. Draw whole histories, so that each draw keeps every date of a unit, including the lagged positions used by `lag()`: households in a survey; groups such as markets or industries, with all their units, in a near-census of firms (this also matters for `hhi`, `powersum`, and `expsum`, which depend on the number of units, so that a unit drawn twice counts as two units). With survey replicate weights, run `ddd` once per replicate weight instead, and use the survey's variance formula.
+
+```stata
+tsset hid year
+set seed 1
+local draws
+forvalues b = 1/200 {
+    preserve
+    bsample, cluster(hid) idcluster(newid)
+    tsset newid year
+    tempfile d`b'
+    ddd wealth [pw = hw], statistic(gini) normalize lag(1) saving(`d`b'')
+    restore
+    local draws `draws' `d`b''
+}
+clear
+append using `draws', generate(draw)
+collapse (mean) drift displacement demography, by(draw)
+summarize drift displacement demography
+```
+
+The standard deviations are the standard errors; the point estimates come from `ddd` on the original data. To draw markets instead, give each drawn market, and each of its firms, its own identifier:
+
+```stata
+    bsample, cluster(market) idcluster(newmarket)
+    egen newfirm = group(newmarket firm)
+    tsset newfirm year
+    tempfile d`b'
+    ddd sales, statistic(hhi) normalize lag(1) by(newmarket) saving(`d`b'')
+```
 
 ## Define your own statistic
 

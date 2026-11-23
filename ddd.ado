@@ -1,4 +1,4 @@
-* version 0.2.0, November 2026
+* version 0.3.0, November 2026
 * Decompose the change in a distributional statistic into drift, displacement, and demography
 * (Gomez, "The Micro Origins of Aggregate Trends: Drift, Displacement, and Demography").
 *
@@ -299,13 +299,21 @@ program define ddd
 		qui gen double entry_selection = entry - entry_mass
 		qui gen double exit_mass = `nuC0' - `mC0'
 		qui gen double exit_selection = exit - exit_mass
+		* With lag(), drift and displacement use lagged weights, and the intervals without continuing units
+		* observed at the lagged date, where the correction is not defined, are dropped. chi_lag is the
+		* correction as a share of displacement with weights at the start.
 		local lagvars
 		if `lag' > 0{
 			rename `NA' NC_lag
-			qui gen double drift_lag = drift + `corr' if NC_lag > 0
-			qui gen double displacement_lag = displacement - `corr' if NC_lag > 0
-			qui gen double chi_lag = `corr' / displacement if NC_lag > 0
-			local lagvars NC_lag drift_lag displacement_lag chi_lag
+			qui keep if NC_lag > 0
+			if _N == 0{
+				di as error "No interval with continuing units observed `lag' before its start"
+				exit 2000
+			}
+			qui gen double chi_lag = `corr' / displacement
+			qui replace drift = drift + `corr'
+			qui replace displacement = displacement - `corr'
+			local lagvars NC_lag chi_lag
 		}
 		keep `by' `time'0 `time'1 nu0 nu1 total drift displacement demography entry exit entry_mass ///
 			entry_selection exit_mass exit_selection N0 N1 NC `lagvars'
@@ -330,10 +338,10 @@ program define ddd
 		label var exit_mass "Mass part of exit"
 		label var exit_selection "Selection part of exit"
 		if `lag' > 0{
+			label var drift "Drift, with weights `lag' before the start"
+			label var displacement "Displacement, with weights `lag' before the start"
 			label var NC_lag "Mass of continuing units also observed `lag' before the start"
-			label var drift_lag "Drift with lagged weights"
-			label var displacement_lag "Displacement with lagged weights"
-			label var chi_lag "Correction (drift_lag - drift) as a share of displacement"
+			label var chi_lag "Correction as a share of displacement with weights at the start"
 		}
 		sort `by' `time'0
 		qui save `output'

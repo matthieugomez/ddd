@@ -1,11 +1,12 @@
 {smcl}
-{* *! version 0.2.0 November 2026}{...}
+{* *! version 0.3.0 November 2026}{...}
 {viewerjumpto "Syntax" "ddd##syntax"}{...}
 {viewerjumpto "Description" "ddd##description"}{...}
 {viewerjumpto "Statistics" "ddd##statistics"}{...}
 {viewerjumpto "User-defined statistics" "ddd##user"}{...}
 {viewerjumpto "Options" "ddd##options"}{...}
 {viewerjumpto "Output" "ddd##output"}{...}
+{viewerjumpto "Standard errors" "ddd##se"}{...}
 {viewerjumpto "Examples" "ddd##examples"}{...}
 {viewerjumpto "Author" "ddd##contact"}{...}
 
@@ -133,11 +134,13 @@ One of the two is required.
 A term of first order in time grows in proportion to the interval: to compare horizons, run {cmd:ddd} once per horizon.
 
 {phang}
-{cmd:lag(}{it:#}{cmd:)} also reports drift and displacement with lagged weights, which remove the bias from transitory measurement error and from flows (such as annual sales).
+{cmd:lag(}{it:#}{cmd:)} computes {cmd:drift} and {cmd:displacement} with lagged weights, which remove the bias from transitory measurement error and from flows (such as annual sales).
 Each continuing unit's weight is then the derivative of the statistic at the positions, {it:#} time units before the start of the interval, of the continuing units observed at that date.
-The correction, {cmd:drift_lag} - {cmd:drift}, is estimated on these units as a share {cmd:chi_lag} of their displacement, and this share of displacement is moved into drift for all continuing units.
+The correction, drift with lagged weights minus drift with weights at the start, is estimated on these units as a share {cmd:chi_lag} of their displacement, and this share of displacement is moved into drift for all continuing units.
 For {cmd:share} and {cmd:average}, whose displacement can be close to zero in the middle of the distribution, the correction is that of the upper bands [{it:lo}, 1] and [{it:hi}, 1], combined.
-{cmd:chi_lag} is not capped; capping it at one keeps corrected displacement of the same sign as displacement.
+{cmd:chi_lag} is not capped; capping it at one keeps displacement of the same sign as displacement with weights at the start.
+Intervals without continuing units observed at the lagged date, such as the first ones, are dropped.
+Drift and displacement with weights at the start are {cmd:drift} - {cmd:chi_lag} {cmd:displacement} / (1 - {cmd:chi_lag}) and {cmd:displacement} / (1 - {cmd:chi_lag}), or the output of {cmd:ddd} without {cmd:lag()}.
 {it:#} must be a multiple of the panel's delta.
 
 {phang}
@@ -164,13 +167,13 @@ One observation per group and interval:
 {p2col :{it:timevar}{cmd:0}, {it:timevar}{cmd:1}}start and end of the interval{p_end}
 {p2col :{cmd:nu0}, {cmd:nu1}}statistic at the start and at the end{p_end}
 {p2col :{cmd:total}}{cmd:nu1} - {cmd:nu0}{p_end}
-{p2col :{cmd:drift}, {cmd:displacement}}terms among continuing units{p_end}
+{p2col :{cmd:drift}, {cmd:displacement}}terms among continuing units, with lagged weights with {cmd:lag()}{p_end}
 {p2col :{cmd:demography}}{cmd:entry} + {cmd:exit}{p_end}
 {p2col :{cmd:entry_mass}, {cmd:entry_selection}}mass and selection parts of {cmd:entry}{p_end}
 {p2col :{cmd:exit_mass}, {cmd:exit_selection}}mass and selection parts of {cmd:exit}{p_end}
 {p2col :{cmd:N0}, {cmd:N1}, {cmd:NC}}mass of units at the start, at the end, and of continuing units{p_end}
-{p2col :{cmd:NC_lag}, {cmd:drift_lag}, {cmd:displacement_lag}}with {cmd:lag()}: mass of continuing units also observed at the lagged date, and the terms among continuing units with lagged weights{p_end}
-{p2col :{cmd:chi_lag}}with {cmd:lag()}: the correction, {cmd:drift_lag} - {cmd:drift}, as a share of {cmd:displacement}{p_end}
+{p2col :{cmd:NC_lag}}with {cmd:lag()}: mass of continuing units also observed at the lagged date{p_end}
+{p2col :{cmd:chi_lag}}with {cmd:lag()}: the correction for lagged weights as a share of displacement with weights at the start{p_end}
 {p2colreset}{...}
 
 {pstd}
@@ -178,6 +181,50 @@ One observation per group and interval:
 With the continuing units' indices nuC0 = {cmd:nu0} + {cmd:exit} and nuC1 = {cmd:nu1} - {cmd:entry},
 log drift is ln((nuC0 + {cmd:drift}) / nuC0), log displacement ln(nuC1 / (nuC0 + {cmd:drift})),
 log entry ln({cmd:nu1} / nuC1), and log exit ln(nuC0 / {cmd:nu0}).
+
+
+{marker se}{...}
+{title:Standard errors}
+
+{pstd}
+{cmd:ddd} reports no standard errors, since what to resample depends on the data.
+To get them, rerun {cmd:ddd} on bootstrap samples and take the standard deviation, across draws, of the quantity you report:
+a component, its average over intervals or groups, or a ratio of components.
+The draws give the standard error of such a combination of observations of the output, which the standard errors of each observation would not.
+
+{pstd}
+Draw whole histories, so that each draw keeps every date of a unit, including the lagged positions used by {cmd:lag()}.
+In a household survey, draw households.
+In a near-census of firms, the uncertainty is rather over groups, such as markets or industries: draw groups, with all their units.
+This also matters for the statistics that depend on the number of units ({cmd:hhi}, {cmd:powersum}, {cmd:expsum}), for which a unit drawn twice counts as two units.
+With survey replicate weights, run {cmd:ddd} once per replicate weight instead, and use the survey's variance formula.
+
+{pstd}Standard errors of the components of the Gini of wealth, averaged over intervals, from 200 draws of households{p_end}
+{phang2}{cmd:. tsset hid year}{p_end}
+{phang2}{cmd:. set seed 1}{p_end}
+{phang2}{cmd:. local draws}{p_end}
+{phang2}{cmd:. forvalues b = 1/200 {c -(}}{p_end}
+{phang2}{cmd:  2.     preserve}{p_end}
+{phang2}{cmd:  3.     bsample, cluster(hid) idcluster(newid)}{p_end}
+{phang2}{cmd:  4.     tsset newid year}{p_end}
+{phang2}{cmd:  5.     tempfile d`b'}{p_end}
+{phang2}{cmd:  6.     ddd wealth [pw = hw], statistic(gini) normalize lag(1) saving(`d`b'')}{p_end}
+{phang2}{cmd:  7.     restore}{p_end}
+{phang2}{cmd:  8.     local draws `draws' `d`b''}{p_end}
+{phang2}{cmd:  9. {c )-}}{p_end}
+{phang2}{cmd:. clear}{p_end}
+{phang2}{cmd:. append using `draws', generate(draw)}{p_end}
+{phang2}{cmd:. collapse (mean) drift displacement demography, by(draw)}{p_end}
+{phang2}{cmd:. summarize drift displacement demography}{p_end}
+
+{pstd}
+The standard deviations are the standard errors; the point estimates come from {cmd:ddd} on the original data.
+To draw markets instead, give each drawn market, and each of its firms, its own identifier:{p_end}
+{phang2}{cmd:  3.     bsample, cluster(market) idcluster(newmarket)}{p_end}
+{phang2}{cmd:  4.     egen newfirm = group(newmarket firm)}{p_end}
+{phang2}{cmd:  5.     tsset newfirm year}{p_end}
+{phang2}{cmd:  6.     tempfile d`b'}{p_end}
+{phang2}{cmd:  7.     ddd sales, statistic(hhi) normalize lag(1) by(newmarket) saving(`d`b'')}{p_end}
 
 
 {marker examples}{...}
